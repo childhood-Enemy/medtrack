@@ -29,34 +29,34 @@ textarea {
   }
 
   .label {
-    @apply mb-1 block text-xs font-semibold uppercase tracking-normal text-stone-600;
+    @apply block mb-1 font-semibold text-stone-600 text-xs uppercase tracking-normal;
   }
 
   .btn {
-    @apply inline-flex h-10 items-center justify-center gap-2 rounded-md border border-stone-300 bg-white px-3 text-sm font-semibold text-stone-800 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex justify-center items-center gap-2 bg-white hover:bg-stone-50 disabled:opacity-50 px-3 border border-stone-300 rounded-md h-10 font-semibold text-stone-800 text-sm transition disabled:cursor-not-allowed;
   }
 
   .btn-primary {
-    @apply border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-800;
+    @apply bg-emerald-700 hover:bg-emerald-800 border-emerald-700 text-white;
   }
 
   .btn-danger {
-    @apply border-red-700 bg-red-700 text-white hover:bg-red-800;
+    @apply bg-red-700 hover:bg-red-800 border-red-700 text-white;
   }
 
   .btn-warning {
-    @apply border-amber-600 bg-amber-500 text-stone-950 hover:bg-amber-600;
+    @apply bg-amber-500 hover:bg-amber-600 border-amber-600 text-stone-950;
   }
 
   .panel {
-    @apply rounded-md border border-stone-300 bg-white;
+    @apply bg-white border border-stone-300 rounded-md;
   }
 
   .table-head {
-    @apply bg-stone-100 text-left text-xs font-semibold uppercase tracking-normal text-stone-600;
+    @apply bg-stone-100 font-semibold text-stone-600 text-xs text-left uppercase tracking-normal;
   }
 
   .table-cell {
-    @apply border-t border-stone-200 px-3 py-2 text-sm text-stone-800;
+    @apply px-3 py-2 border-stone-200 border-t text-stone-800 text-sm;
   }
 }

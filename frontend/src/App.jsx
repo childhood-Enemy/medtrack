@@ -7,18 +7,21 @@ import {
   Home,
   Package,
   PhoneCall,
-  Pill,
   Plus,
   Printer,
   RefreshCcw,
   Save,
   Trash2,
   Truck,
+  Pill,
   X,
 } from "lucide-react";
+import { PillButton } from "./Pill/PillButton.jsx";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, apiUrl } from "./api.js";
 import { money, todayInputDate } from "./utils.js";
+import { get } from "lodash";
+import InventoryAlertTable from "./InventoryAlertTable/InventoryAlertTable.jsx";
 
 const STATUS_OPTIONS = [
   "draft",
@@ -29,6 +32,20 @@ const STATUS_OPTIONS = [
   "received",
   "cancelled",
   "overdue",
+];
+const PILL_OPTIONS = [
+  {
+    label: "Low Supply",
+    value: "low-supply",
+    property: "lowStockMedicines",
+    styling: "bg-red-100 text-red-800 border-red-300 hover:bg-red-200",
+  },
+  {
+    label: "Refill Soon",
+    value: "Refill Soon",
+    property: "refillSoonMedicines",
+    styling: "bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200",
+  }
 ];
 
 function uid() {
@@ -179,6 +196,8 @@ function StatusBar({ summary, loading, error }) {
 }
 
 function HomePage({ summary, loading }) {
+  const [activeTab, setActiveTab] = useState("Refill Soon");
+
   if (loading || !summary) {
     return <div className="p-4 text-stone-600 text-sm panel">Loading home summary...</div>;
   }
@@ -186,8 +205,8 @@ function HomePage({ summary, loading }) {
   let { pendingSupplierOrders, pendingSupplierOrdersTotal, pendingSupplierOrdersPage, pendingSupplierOrdersPageSize } = summary;
   return (
     <section className="space-y-4">
-      <div className="gap-4 grid lg:grid-cols-[1fr_1fr]">
-        <AlertPanel alerts={summary.alerts || []} />
+      {/* Pending Supplier Orders - Show a reason as to why these are alerts */}
+      <div className="gap-4 grid lg:grid-cols-1">
         <PendingSupplierPanel
           orders={pendingSupplierOrders || []}
           total={pendingSupplierOrdersTotal || 0}
@@ -195,40 +214,21 @@ function HomePage({ summary, loading }) {
           pageSize={pendingSupplierOrdersPageSize || 10}
         />
       </div>
-
-      <div className="gap-4 grid lg:grid-cols-2">
-        <InventoryAlertTable title="Low Supply" icon={AlertTriangle} rows={summary.lowStockMedicines || []} />
-        <InventoryAlertTable title="Refill Soon" icon={Package} rows={summary.refillSoonMedicines || []} />
+      {/* Inventory tables for Low Supply and Refill Soon Inventory */}
+      <div className="gap-4 grid lg:grid-cols-1">
+        <PillButton options={PILL_OPTIONS} onChange={setActiveTab} selectedTab={activeTab} />
+        {PILL_OPTIONS.map((option) => {
+          const { value, label, property, styling } = option;
+          return activeTab === value && (
+            <InventoryAlertTable
+              title={`${label} (${get(summary, property, "").length || 0})`}
+              icon={AlertTriangle}
+              rows={get(summary, property, "") || []}
+              bg={styling}
+            />);
+        })}
       </div>
     </section>
-  );
-}
-
-function AlertPanel({ alerts }) {
-  return (
-    <div className="overflow-hidden panel">
-      <div className="flex items-center gap-2 px-4 py-3 border-stone-200 border-b">
-        <AlertTriangle size={20} />
-        <h2 className="font-bold text-stone-950 text-lg">Operational Alerts</h2>
-      </div>
-      <div className="space-y-2 p-4">
-        {alerts.map((alert) => {
-          const { severity, alertType, message, alertKey } = alert;
-          return (<div
-            className={`rounded-md border px-3 py-2 text-sm ${severity === "critical"
-              ? "border-red-300 bg-red-50 text-red-800"
-              : "border-amber-300 bg-amber-50 text-amber-900"
-              }`}
-            key={alertKey}
-          >
-            <div className="font-semibold">{alertType}</div>
-            <div>{message}</div>
-          </div>);
-        }
-        )}
-        {alerts.length === 0 && <div className="text-stone-600 text-sm">No active alerts.</div>}
-      </div>
-    </div>
   );
 }
 
@@ -275,43 +275,7 @@ function PendingSupplierPanel({ orders, total, page, pageSize }) {
   );
 }
 
-function InventoryAlertTable({ title, icon: Icon, rows }) {
-  return (
-    <div className="overflow-hidden panel">
-      <div className="flex items-center gap-2 px-4 py-3 border-stone-200 border-b">
-        <Icon size={20} />
-        <h2 className="font-bold text-stone-950 text-lg">{title}</h2>
-      </div>
-      <div className="max-h-[255px] overflow-auto">
-        <table className="w-full min-w-[430px] border-collapse">
-          <thead className="table-head">
-            <tr>
-              <th className="px-3 py-2">Medicine</th>
-              <th className="px-3 py-2">Units</th>
-              <th className="px-3 py-2">Level</th>
-              <th className="px-3 py-2">Buffer</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr className="bg-white" key={row.medicineId}>
-                <td className="table-cell">{row.medicineName}</td>
-                <td className="table-cell">{row.currentUnits}</td>
-                <td className="table-cell">{row.replenishmentLevel}</td>
-                <td className="table-cell">{row.refillBufferUnits}</td>
-              </tr>
-            ))}
-            {rows.length === 0 && (
-              <tr>
-                <td className="table-cell text-stone-600" colSpan="4">No medicines in this category.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
+
 
 function OrdersPage({ medicines, salesOrders, onChanged }) {
   const [form, setForm] = useState({
