@@ -160,7 +160,7 @@ def seed_suppliers(store: SQLiteStore) -> list[dict[str, Any]]:
 
 
 def seed_supplier_orders(store: SQLiteStore, medicines: list[dict[str, Any]], suppliers: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    statuses = ["sent", "awaiting_confirmation", "confirmed", "partially_received", "received"]
+    statuses = ["sent", "awaiting confirmation", "confirmed", "partially received", "received"]
     today = date.fromisoformat(today_iso())
     created: list[dict[str, Any]] = []
     source_medicines = medicines[45:]
@@ -183,13 +183,13 @@ def seed_supplier_orders(store: SQLiteStore, medicines: list[dict[str, Any]], su
                 "supplierId": suppliers[index]["id"],
                 "orderDate": (today - timedelta(days=12 - index * 2)).isoformat(),
                 "expectedDeliveryDate": (today + timedelta(days=index - 1)).isoformat(),
-                "status": "confirmed" if status in {"partially_received", "received"} else status,
+                "status": "confirmed" if status in {"partially received", "received"} else status,
                 "discountAmount": f"{10 + index * 3:.2f}",
                 "notes": "Demo seed data supplier invoice",
                 "items": items,
             }
         )
-        if status == "partially_received":
+        if status == "partially received":
             receive_items = [
                 {"itemId": item["id"], "qtyReceived": max(1, int(item["qtyOrdered"]) // 2)}
                 for item in order["items"]

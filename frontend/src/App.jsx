@@ -6,6 +6,7 @@ import {
   FileText,
   Home,
   Package,
+  PhoneCall,
   Pill,
   Plus,
   Printer,
@@ -22,9 +23,9 @@ import { money, todayInputDate } from "./utils.js";
 const STATUS_OPTIONS = [
   "draft",
   "sent",
-  "awaiting_confirmation",
+  "awaiting confirmation",
   "confirmed",
-  "partially_received",
+  "partially received",
   "received",
   "cancelled",
   "overdue",
@@ -106,28 +107,27 @@ export default function App() {
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-stone-300 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-4 md:flex-row md:items-center md:justify-between">
+      <header className="bg-white border-stone-300 border-b">
+        <div className="flex md:flex-row flex-col md:justify-between md:items-center gap-3 mx-auto px-4 py-4 max-w-7xl">
           <div>
-            <div className="text-2xl font-bold tracking-normal text-stone-950">MEDTRACK</div>
-            <div className="text-sm text-stone-600">Inventory, sales receipts, and supplier order follow-up</div>
+            <div className="font-bold text-stone-950 text-2xl tracking-normal"><button onClick={() => setView("home")}>MEDTRACK</button></div>
+            <div className="text-stone-600 text-sm">Inventory, sales receipts, and supplier order follow-up</div>
           </div>
           <nav className="flex flex-wrap gap-2">
-            <NavButton active={view === "home"} icon={Home} label="Home" onClick={() => setView("home")} />
+            <NavButton active={view === "home"} icon={Home} onClick={() => setView("home")} />
             <NavButton active={view === "orders"} icon={ClipboardList} label="Orders" onClick={() => setView("orders")} />
             <NavButton active={view === "invoice"} icon={FileText} label="Invoice" onClick={() => setView("invoice")} />
             <NavButton active={view === "medicines"} icon={Pill} label="Medicines" onClick={() => setView("medicines")} />
+            <button className="btn" onClick={refreshAll} type="button">
+              <RefreshCcw size={18} />
+            </button>
           </nav>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-5">
-        <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+      <main className="mx-auto px-4 py-5 max-w-7xl">
+        <div className="flex md:flex-row flex-col md:justify-between md:items-center gap-2 mb-4">
           <StatusBar summary={homeSummary} loading={loading} error={apiError} />
-          <button className="btn" onClick={refreshAll} type="button">
-            <RefreshCcw size={18} />
-            Refresh
-          </button>
         </div>
 
         {view === "home" && <HomePage summary={homeSummary} loading={loading} />}
@@ -166,13 +166,13 @@ function StatusBar({ summary, loading, error }) {
     return <InlineAlert tone="error" text={error} />;
   }
   if (loading || !summary) {
-    return <div className="text-sm text-stone-600">Loading SQLite data...</div>;
+    return <div className="text-stone-600 text-sm">Loading SQLite data...</div>;
   }
   return (
     <div className="flex flex-wrap gap-2 text-sm">
-      <Metric label="Today Sales" value={`Rs ${money(summary.todaySalesValue)}`} />
-      <Metric label="YTD Sales" value={`Rs ${money(summary.ytdSalesValue)}`} />
-      <Metric label="Today Qty" value={summary.todayQtySold} />
+      <Metric label="Sales Value (Today)" value={`Rs ${money(summary.todaySalesValue)}`} />
+      <Metric label="Sales Value (YTD)" value={`Rs ${money(summary.ytdSalesValue)}`} />
+      <Metric label="Quantity Sold Today" value={summary.todayQtySold} />
       <Metric label="Alerts" value={summary.alerts?.length || 0} tone={summary.alerts?.length ? "warn" : "ok"} />
     </div>
   );
@@ -180,29 +180,23 @@ function StatusBar({ summary, loading, error }) {
 
 function HomePage({ summary, loading }) {
   if (loading || !summary) {
-    return <div className="panel p-4 text-sm text-stone-600">Loading home summary...</div>;
+    return <div className="p-4 text-stone-600 text-sm panel">Loading home summary...</div>;
   }
 
+  let { pendingSupplierOrders, pendingSupplierOrdersTotal, pendingSupplierOrdersPage, pendingSupplierOrdersPageSize } = summary;
   return (
     <section className="space-y-4">
-      <div className="grid gap-3 md:grid-cols-4">
-        <SummaryTile label="Sales Today" value={`Rs ${money(summary.todaySalesValue)}`} />
-        <SummaryTile label="Sales YTD" value={`Rs ${money(summary.ytdSalesValue)}`} />
-        <SummaryTile label="Qty Today" value={summary.todayQtySold} />
-        <SummaryTile label="Qty YTD" value={summary.ytdQtySold} />
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+      <div className="gap-4 grid lg:grid-cols-[1fr_1fr]">
         <AlertPanel alerts={summary.alerts || []} />
         <PendingSupplierPanel
-          orders={summary.pendingSupplierOrders || []}
-          total={summary.pendingSupplierOrdersTotal || 0}
-          page={summary.pendingSupplierOrdersPage || 1}
-          pageSize={summary.pendingSupplierOrdersPageSize || 10}
+          orders={pendingSupplierOrders || []}
+          total={pendingSupplierOrdersTotal || 0}
+          page={pendingSupplierOrdersPage || 1}
+          pageSize={pendingSupplierOrdersPageSize || 10}
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="gap-4 grid lg:grid-cols-2">
         <InventoryAlertTable title="Low Supply" icon={AlertTriangle} rows={summary.lowStockMedicines || []} />
         <InventoryAlertTable title="Refill Soon" icon={Package} rows={summary.refillSoonMedicines || []} />
       </div>
@@ -212,26 +206,27 @@ function HomePage({ summary, loading }) {
 
 function AlertPanel({ alerts }) {
   return (
-    <div className="panel overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-stone-200 px-4 py-3">
+    <div className="overflow-hidden panel">
+      <div className="flex items-center gap-2 px-4 py-3 border-stone-200 border-b">
         <AlertTriangle size={20} />
-        <h2 className="text-lg font-bold text-stone-950">Operational Alerts</h2>
+        <h2 className="font-bold text-stone-950 text-lg">Operational Alerts</h2>
       </div>
       <div className="space-y-2 p-4">
-        {alerts.map((alert) => (
-          <div
-            className={`rounded-md border px-3 py-2 text-sm ${
-              alert.severity === "critical"
-                ? "border-red-300 bg-red-50 text-red-800"
-                : "border-amber-300 bg-amber-50 text-amber-900"
-            }`}
-            key={alert.alertKey}
+        {alerts.map((alert) => {
+          const { severity, alertType, message, alertKey } = alert;
+          return (<div
+            className={`rounded-md border px-3 py-2 text-sm ${severity === "critical"
+              ? "border-red-300 bg-red-50 text-red-800"
+              : "border-amber-300 bg-amber-50 text-amber-900"
+              }`}
+            key={alertKey}
           >
-            <div className="font-semibold">{alert.alertType}</div>
-            <div>{alert.message}</div>
-          </div>
-        ))}
-        {alerts.length === 0 && <div className="text-sm text-stone-600">No active alerts.</div>}
+            <div className="font-semibold">{alertType}</div>
+            <div>{message}</div>
+          </div>);
+        }
+        )}
+        {alerts.length === 0 && <div className="text-stone-600 text-sm">No active alerts.</div>}
       </div>
     </div>
   );
@@ -239,18 +234,17 @@ function AlertPanel({ alerts }) {
 
 function PendingSupplierPanel({ orders, total, page, pageSize }) {
   return (
-    <div className="panel overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-stone-200 px-4 py-3">
+    <div className="overflow-hidden panel">
+      <div className="flex items-center gap-2 px-4 py-3 border-stone-200 border-b">
         <Truck size={20} />
-        <h2 className="text-lg font-bold text-stone-950">Supplier Orders To Confirm</h2>
+        <h2 className="font-bold text-stone-950 text-lg">Supplier Orders To Confirm</h2>
       </div>
-      <div className="overflow-auto">
-        <table className="min-w-[680px] w-full border-collapse">
+      <div className="max-h-[255px] overflow-auto">
+        <table className="w-full min-w-[590px] border-collapse">
           <thead className="table-head">
             <tr>
-              <th className="px-3 py-2">PO</th>
               <th className="px-3 py-2">Supplier</th>
-              <th className="px-3 py-2">Phone</th>
+              <th className="px-3 py-2">Call</th>
               <th className="px-3 py-2">Deadline</th>
               <th className="px-3 py-2">Value</th>
               <th className="px-3 py-2">Status</th>
@@ -259,9 +253,8 @@ function PendingSupplierPanel({ orders, total, page, pageSize }) {
           <tbody>
             {orders.map((order) => (
               <tr className="bg-white" key={order.id}>
-                <td className="table-cell font-semibold">{order.poNo}</td>
                 <td className="table-cell">{order.supplierName}</td>
-                <td className="table-cell">{order.followUpPhone || order.supplierPhone || "-"}</td>
+                <td className="table-cell"><CallIcon phone={order.followUpPhone || order.supplierPhone} /></td>
                 <td className="table-cell">{order.expectedDeliveryDate}</td>
                 <td className="table-cell">Rs {money(order.totalCommittedValue)}</td>
                 <td className="table-cell">{order.status}</td>
@@ -269,13 +262,13 @@ function PendingSupplierPanel({ orders, total, page, pageSize }) {
             ))}
             {orders.length === 0 && (
               <tr>
-                <td className="table-cell text-stone-600" colSpan="6">No supplier orders awaiting confirmation.</td>
+                <td className="table-cell text-stone-600" colSpan="5">No supplier orders awaiting confirmation.</td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
-      <div className="border-t border-stone-200 px-4 py-2 text-xs text-stone-600">
+      <div className="px-4 py-2 border-stone-200 border-t text-stone-600 text-xs">
         Page {page}; showing up to {pageSize} of {total}.
       </div>
     </div>
@@ -284,16 +277,15 @@ function PendingSupplierPanel({ orders, total, page, pageSize }) {
 
 function InventoryAlertTable({ title, icon: Icon, rows }) {
   return (
-    <div className="panel overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-stone-200 px-4 py-3">
+    <div className="overflow-hidden panel">
+      <div className="flex items-center gap-2 px-4 py-3 border-stone-200 border-b">
         <Icon size={20} />
-        <h2 className="text-lg font-bold text-stone-950">{title}</h2>
+        <h2 className="font-bold text-stone-950 text-lg">{title}</h2>
       </div>
-      <div className="overflow-auto">
-        <table className="min-w-[520px] w-full border-collapse">
+      <div className="max-h-[255px] overflow-auto">
+        <table className="w-full min-w-[430px] border-collapse">
           <thead className="table-head">
             <tr>
-              <th className="px-3 py-2">SKU</th>
               <th className="px-3 py-2">Medicine</th>
               <th className="px-3 py-2">Units</th>
               <th className="px-3 py-2">Level</th>
@@ -303,7 +295,6 @@ function InventoryAlertTable({ title, icon: Icon, rows }) {
           <tbody>
             {rows.map((row) => (
               <tr className="bg-white" key={row.medicineId}>
-                <td className="table-cell font-semibold">{row.skuCode}</td>
                 <td className="table-cell">{row.medicineName}</td>
                 <td className="table-cell">{row.currentUnits}</td>
                 <td className="table-cell">{row.replenishmentLevel}</td>
@@ -312,7 +303,7 @@ function InventoryAlertTable({ title, icon: Icon, rows }) {
             ))}
             {rows.length === 0 && (
               <tr>
-                <td className="table-cell text-stone-600" colSpan="5">No medicines in this category.</td>
+                <td className="table-cell text-stone-600" colSpan="4">No medicines in this category.</td>
               </tr>
             )}
           </tbody>
@@ -372,30 +363,30 @@ function OrdersPage({ medicines, salesOrders, onChanged }) {
   };
 
   return (
-    <section className="grid gap-4 lg:grid-cols-[1fr_430px]">
-      <form className="panel p-4" onSubmit={submitOrder}>
+    <section className="gap-4 grid lg:grid-cols-[1fr_430px]">
+      <form className="p-4 panel" onSubmit={submitOrder}>
         <div className="mb-4">
-          <h1 className="text-xl font-bold text-stone-950">Orders</h1>
-          <p className="text-sm text-stone-600">Create multi-medicine customer orders and print PDF receipts.</p>
+          <h1 className="font-bold text-stone-950 text-xl">Orders</h1>
+          <p className="text-stone-600 text-sm">Create multi-medicine customer orders and print PDF receipts.</p>
         </div>
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="gap-3 grid md:grid-cols-4">
           <DateField label="Order Date" value={form.orderDate} onChange={(value) => setForm({ ...form, orderDate: value })} />
           <TextField label="Customer Name" value={form.customerName} onChange={(value) => setForm({ ...form, customerName: value })} />
           <TextField label="Customer Phone" value={form.customerPhone} onChange={(value) => setForm({ ...form, customerPhone: value })} />
           <NumberField label="Order Discount" value={form.discountAmount} onChange={(value) => setForm({ ...form, discountAmount: value })} step="0.01" />
         </div>
 
-        <div className="mt-4 space-y-3">
+        <div className="space-y-3 mt-4">
           {lines.map((line, index) => (
-            <div className="rounded-md border border-stone-300 bg-stone-50 p-3" key={line.id}>
-              <div className="mb-2 flex items-center justify-between">
+            <div className="bg-stone-50 p-3 border border-stone-300 rounded-md" key={line.id}>
+              <div className="flex justify-between items-center mb-2">
                 <div className="font-semibold">Medicine {index + 1}</div>
-                <button className="btn h-8 px-2" disabled={lines.length === 1} onClick={() => setLines(lines.filter((item) => item.id !== line.id))} type="button">
+                <button className="px-2 h-8 btn" disabled={lines.length === 1} onClick={() => setLines(lines.filter((item) => item.id !== line.id))} type="button">
                   <Trash2 size={16} />
                   Remove
                 </button>
               </div>
-              <div className="grid gap-3 md:grid-cols-[2fr_100px_120px_120px]">
+              <div className="gap-3 grid md:grid-cols-[2fr_100px_120px_120px]">
                 <MedicineSelect medicines={medicines} value={line.medicineId} onChange={(value) => selectMedicine(line.id, value)} />
                 <NumberField label="Qty" value={line.qtySold} onChange={(value) => updateLine(line.id, { qtySold: value })} />
                 <NumberField label="Unit Price" value={line.unitPrice} onChange={(value) => updateLine(line.id, { unitPrice: value })} step="0.01" />
@@ -405,7 +396,7 @@ function OrdersPage({ medicines, salesOrders, onChanged }) {
           ))}
         </div>
 
-        <div className="mt-4 flex flex-col gap-3 md:flex-row md:justify-between">
+        <div className="flex md:flex-row flex-col md:justify-between gap-3 mt-4">
           <button className="btn" onClick={() => setLines([...lines, newSalesLine()])} type="button">
             <Plus size={18} />
             Add Medicine
@@ -426,26 +417,26 @@ function OrdersPage({ medicines, salesOrders, onChanged }) {
 
 function RecentSalesOrders({ orders }) {
   return (
-    <div className="panel overflow-hidden">
-      <div className="border-b border-stone-200 px-4 py-3">
-        <h2 className="text-lg font-bold text-stone-950">Recent Receipts</h2>
+    <div className="overflow-hidden panel">
+      <div className="px-4 py-3 border-stone-200 border-b">
+        <h2 className="font-bold text-stone-950 text-lg">Recent Receipts</h2>
       </div>
       <div className="max-h-[720px] overflow-auto">
         {orders.map((order) => (
-          <div className="border-b border-stone-200 p-3" key={order.id}>
-            <div className="flex items-center justify-between gap-2">
+          <div className="p-3 border-stone-200 border-b" key={order.id}>
+            <div className="flex justify-between items-center gap-2">
               <div>
                 <div className="font-semibold">{order.orderNo}</div>
-                <div className="text-xs text-stone-600">{order.orderDate} | Rs {money(order.totalAmount)}</div>
+                <div className="text-stone-600 text-xs">{order.orderDate} | Rs {money(order.totalAmount)}</div>
               </div>
-              <button className="btn h-9" onClick={() => window.open(apiUrl(order.receiptUrl), "_blank", "noopener")} type="button">
+              <button className="h-9 btn" onClick={() => window.open(apiUrl(order.receiptUrl), "_blank", "noopener")} type="button">
                 <Printer size={16} />
                 PDF
               </button>
             </div>
           </div>
         ))}
-        {orders.length === 0 && <div className="p-4 text-sm text-stone-600">No sales orders yet.</div>}
+        {orders.length === 0 && <div className="p-4 text-stone-600 text-sm">No sales orders yet.</div>}
       </div>
     </div>
   );
@@ -526,26 +517,26 @@ function InvoicePage({ medicines, suppliers, supplierOrders, onChanged }) {
 
   return (
     <section className="space-y-4">
-      <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
-        <form className="panel p-4" onSubmit={saveSupplier}>
-          <h1 className="mb-1 text-xl font-bold text-stone-950">Suppliers</h1>
-          <p className="mb-4 text-sm text-stone-600">Add suppliers with follow-up phone and reliability rating.</p>
-          <div className="grid gap-3">
+      <div className="gap-4 grid lg:grid-cols-[360px_1fr]">
+        <form className="p-4 panel" onSubmit={saveSupplier}>
+          <h1 className="mb-1 font-bold text-stone-950 text-xl">Suppliers</h1>
+          <p className="mb-4 text-stone-600 text-sm">Add suppliers with follow-up phone and reliability rating.</p>
+          <div className="gap-3 grid">
             <TextField label="Supplier Name" value={supplierForm.supplierName} onChange={(value) => setSupplierForm({ ...supplierForm, supplierName: value })} />
             <TextField label="Phone" value={supplierForm.phone} onChange={(value) => setSupplierForm({ ...supplierForm, phone: value })} />
             <TextField label="Contact Person" value={supplierForm.contactPerson} onChange={(value) => setSupplierForm({ ...supplierForm, contactPerson: value })} />
             <NumberField label="Reliability 1-5" value={supplierForm.reliabilityRating} onChange={(value) => setSupplierForm({ ...supplierForm, reliabilityRating: value })} />
           </div>
-          <button className="btn btn-primary mt-4 w-full" type="submit">
+          <button className="mt-4 w-full btn btn-primary" type="submit">
             <Save size={18} />
             Save Supplier
           </button>
         </form>
 
-        <form className="panel p-4" onSubmit={saveSupplierOrder}>
-          <h1 className="mb-1 text-xl font-bold text-stone-950">Supplier Order Invoice</h1>
-          <p className="mb-4 text-sm text-stone-600">Place supplier orders, track confirmation, deadlines, and receipts.</p>
-          <div className="grid gap-3 md:grid-cols-5">
+        <form className="p-4 panel" onSubmit={saveSupplierOrder}>
+          <h1 className="mb-1 font-bold text-stone-950 text-xl">Supplier Order Invoice</h1>
+          <p className="mb-4 text-stone-600 text-sm">Place supplier orders, track confirmation, deadlines, and receipts.</p>
+          <div className="gap-3 grid md:grid-cols-5">
             <div>
               <label className="label">Supplier</label>
               <select className="field" value={orderForm.supplierId} onChange={(event) => setOrderForm({ ...orderForm, supplierId: event.target.value })}>
@@ -569,17 +560,17 @@ function InvoicePage({ medicines, suppliers, supplierOrders, onChanged }) {
             <TextField label="Notes" value={orderForm.notes} onChange={(value) => setOrderForm({ ...orderForm, notes: value })} />
           </div>
 
-          <div className="mt-4 space-y-3">
+          <div className="space-y-3 mt-4">
             {lines.map((line, index) => (
-              <div className="rounded-md border border-stone-300 bg-stone-50 p-3" key={line.id}>
-                <div className="mb-2 flex items-center justify-between">
+              <div className="bg-stone-50 p-3 border border-stone-300 rounded-md" key={line.id}>
+                <div className="flex justify-between items-center mb-2">
                   <div className="font-semibold">Supplier Item {index + 1}</div>
-                  <button className="btn h-8 px-2" disabled={lines.length === 1} onClick={() => setLines(lines.filter((item) => item.id !== line.id))} type="button">
+                  <button className="px-2 h-8 btn" disabled={lines.length === 1} onClick={() => setLines(lines.filter((item) => item.id !== line.id))} type="button">
                     <Trash2 size={16} />
                     Remove
                   </button>
                 </div>
-                <div className="grid gap-3 md:grid-cols-[2fr_110px_140px_120px]">
+                <div className="gap-3 grid md:grid-cols-[2fr_110px_140px_120px]">
                   <MedicineSelect medicines={medicines} value={line.medicineId} onChange={(value) => selectMedicine(line.id, value)} />
                   <NumberField label="Qty" value={line.qtyOrdered} onChange={(value) => updateLine(line.id, { qtyOrdered: value })} />
                   <NumberField label="Committed Price" value={line.committedUnitPrice} onChange={(value) => updateLine(line.id, { committedUnitPrice: value })} step="0.01" />
@@ -589,7 +580,7 @@ function InvoicePage({ medicines, suppliers, supplierOrders, onChanged }) {
             ))}
           </div>
 
-          <div className="mt-4 flex flex-col gap-3 md:flex-row md:justify-between">
+          <div className="flex md:flex-row flex-col md:justify-between gap-3 mt-4">
             <button className="btn" onClick={() => setLines([...lines, newSupplierLine()])} type="button">
               <Plus size={18} />
               Add Item
@@ -633,18 +624,17 @@ function SupplierOrderTable({ orders, onChanged }) {
   };
 
   return (
-    <div className="panel overflow-hidden">
-      <div className="border-b border-stone-200 px-4 py-3">
-        <h2 className="text-lg font-bold text-stone-950">Supplier Order Status</h2>
+    <div className="overflow-hidden panel">
+      <div className="px-4 py-3 border-stone-200 border-b">
+        <h2 className="font-bold text-stone-950 text-lg">Supplier Order Status</h2>
       </div>
       {error && <InlineAlert tone="error" text={error} />}
-      <div className="overflow-auto">
-        <table className="min-w-[1120px] w-full border-collapse">
+      <div className="max-h-[255px] overflow-auto">
+        <table className="w-full min-w-[1020px] border-collapse">
           <thead className="table-head">
             <tr>
-              <th className="px-3 py-2">PO</th>
               <th className="px-3 py-2">Supplier</th>
-              <th className="px-3 py-2">Phone</th>
+              <th className="px-3 py-2">Call</th>
               <th className="px-3 py-2">Deadline</th>
               <th className="px-3 py-2">Qty</th>
               <th className="px-3 py-2">Value</th>
@@ -659,25 +649,24 @@ function SupplierOrderTable({ orders, onChanged }) {
               const qtyReceived = order.items.reduce((total, item) => total + Number(item.qtyReceived || 0), 0);
               return (
                 <tr className="bg-white" key={order.id}>
-                  <td className="table-cell font-semibold">{order.poNo}</td>
                   <td className="table-cell">{order.supplierName}</td>
-                  <td className="table-cell">{order.followUpPhone || order.supplierPhone || "-"}</td>
+                  <td className="table-cell"><CallIcon phone={order.followUpPhone || order.supplierPhone} /></td>
                   <td className="table-cell">{order.expectedDeliveryDate}</td>
                   <td className="table-cell">{qtyReceived}/{qtyOrdered}</td>
                   <td className="table-cell">Rs {money(order.totalCommittedValue)}</td>
                   <td className="table-cell">{order.reliabilitySnapshot}/5</td>
                   <td className="table-cell">
-                    <select className="field h-9 min-w-44" value={order.status} onChange={(event) => updateStatus(order.id, event.target.value)}>
+                    <select className="min-w-44 h-9 field" value={order.status} onChange={(event) => updateStatus(order.id, event.target.value)}>
                       {STATUS_OPTIONS.map((status) => <option key={status} value={status}>{status}</option>)}
                     </select>
                   </td>
                   <td className="table-cell">
                     <div className="flex gap-2">
-                      <button className="btn h-9" onClick={() => receiveAll(order.id)} type="button" disabled={order.status === "received" || order.status === "cancelled"}>
+                      <button className="h-9 btn" onClick={() => receiveAll(order.id)} type="button" disabled={order.status === "received" || order.status === "cancelled"}>
                         <Package size={16} />
                         Receive
                       </button>
-                      <button className="btn h-9" onClick={() => window.open(apiUrl(order.invoiceUrl), "_blank", "noopener")} type="button">
+                      <button className="h-9 btn" onClick={() => window.open(apiUrl(order.invoiceUrl), "_blank", "noopener")} type="button">
                         <Printer size={16} />
                         PDF
                       </button>
@@ -688,7 +677,7 @@ function SupplierOrderTable({ orders, onChanged }) {
             })}
             {orders.length === 0 && (
               <tr>
-                <td className="table-cell text-stone-600" colSpan="9">No supplier orders yet.</td>
+                <td className="table-cell text-stone-600" colSpan="8">No supplier orders yet.</td>
               </tr>
             )}
           </tbody>
@@ -769,21 +758,21 @@ function MedicinesPage({ medicines, inventory, onChanged }) {
   };
 
   return (
-    <section className="grid gap-4 lg:grid-cols-[430px_1fr]">
-      <form className="panel p-4" onSubmit={saveMedicine}>
-        <div className="mb-4 flex items-start justify-between gap-3">
+    <section className="gap-4 grid lg:grid-cols-[430px_1fr]">
+      <form className="p-4 panel" onSubmit={saveMedicine}>
+        <div className="flex justify-between items-start gap-3 mb-4">
           <div>
-            <h1 className="text-xl font-bold text-stone-950">Medicines</h1>
-            <p className="text-sm text-stone-600">Create, update, or archive medicines and stock thresholds.</p>
+            <h1 className="font-bold text-stone-950 text-xl">Medicines</h1>
+            <p className="text-stone-600 text-sm">Create, update, or archive medicines and stock thresholds.</p>
           </div>
           {editingId && (
-            <button className="btn h-9" onClick={() => { setEditingId(null); setForm(emptyMedicineForm()); }} type="button">
+            <button className="h-9 btn" onClick={() => { setEditingId(null); setForm(emptyMedicineForm()); }} type="button">
               <X size={16} />
               Clear
             </button>
           )}
         </div>
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="gap-3 grid md:grid-cols-2">
           <TextField label="SKU Code" value={form.skuCode} onChange={(value) => setForm({ ...form, skuCode: value })} />
           <TextField label="SKU Name" value={form.skuName} onChange={(value) => setForm({ ...form, skuName: value })} />
           <TextField label="Medicine Name" value={form.medicineName} onChange={(value) => setForm({ ...form, medicineName: value })} />
@@ -798,7 +787,7 @@ function MedicinesPage({ medicines, inventory, onChanged }) {
           <NumberField label="Replenishment Level" value={form.replenishmentLevel} onChange={(value) => setForm({ ...form, replenishmentLevel: value })} />
           <NumberField label="Refill Buffer" value={form.refillBufferUnits} onChange={(value) => setForm({ ...form, refillBufferUnits: value })} />
         </div>
-        <button className="btn btn-primary mt-4 w-full" type="submit">
+        <button className="mt-4 w-full btn btn-primary" type="submit">
           <Save size={18} />
           {editingId ? "Update Medicine" : "Create Medicine"}
         </button>
@@ -806,15 +795,14 @@ function MedicinesPage({ medicines, inventory, onChanged }) {
         {error && <InlineAlert tone="error" text={error} />}
       </form>
 
-      <div className="panel overflow-hidden">
-        <div className="border-b border-stone-200 px-4 py-3">
-          <h2 className="text-lg font-bold text-stone-950">Medicine Stock</h2>
+      <div className="overflow-hidden panel">
+        <div className="px-4 py-3 border-stone-200 border-b">
+          <h2 className="font-bold text-stone-950 text-lg">Medicine Stock</h2>
         </div>
-        <div className="overflow-auto">
-          <table className="min-w-[980px] w-full border-collapse">
+        <div className="max-h-[255px] overflow-auto">
+          <table className="w-100 min-w-[880px] border-collapse">
             <thead className="table-head">
               <tr>
-                <th className="px-3 py-2">SKU</th>
                 <th className="px-3 py-2">Medicine</th>
                 <th className="px-3 py-2">Brand</th>
                 <th className="px-3 py-2">Units</th>
@@ -829,7 +817,6 @@ function MedicinesPage({ medicines, inventory, onChanged }) {
                 const stock = inventory.find((row) => row.medicineId === medicine.id);
                 return (
                   <tr className="bg-white" key={medicine.id}>
-                    <td className="table-cell font-semibold">{medicine.skuCode}</td>
                     <td className="table-cell">{medicine.medicineName}</td>
                     <td className="table-cell">{medicine.brand}</td>
                     <td className="table-cell">{stock?.currentUnits ?? medicine.currentUnits ?? 0}</td>
@@ -838,13 +825,11 @@ function MedicinesPage({ medicines, inventory, onChanged }) {
                     <td className="table-cell">Rs {money(medicine.sellingPrice)}</td>
                     <td className="table-cell">
                       <div className="flex gap-2">
-                        <button className="btn h-9" onClick={() => editMedicine(medicine)} type="button">
+                        <button className="h-6 btn" onClick={() => editMedicine(medicine)} type="button">
                           <Save size={16} />
-                          Edit
                         </button>
-                        <button className="btn btn-danger h-9" onClick={() => archiveMedicine(medicine.id)} type="button">
+                        <button className="h-6 btn btn-danger" onClick={() => archiveMedicine(medicine.id)} type="button">
                           <Archive size={16} />
-                          Archive
                         </button>
                       </div>
                     </td>
@@ -853,7 +838,7 @@ function MedicinesPage({ medicines, inventory, onChanged }) {
               })}
               {medicines.length === 0 && (
                 <tr>
-                  <td className="table-cell text-stone-600" colSpan="8">No active medicines yet.</td>
+                  <td className="table-cell text-stone-600" colSpan="7">No active medicines yet.</td>
                 </tr>
               )}
             </tbody>
@@ -877,6 +862,18 @@ function MedicineSelect({ medicines, value, onChange }) {
         ))}
       </select>
     </div>
+  );
+}
+
+function CallIcon({ phone }) {
+  if (!phone) {
+    return <span className="text-stone-500">-</span>;
+  }
+
+  return (
+    <span className="inline-flex justify-center items-center bg-white border border-stone-300 rounded-md w-8 h-8 text-stone-800" title={phone}>
+      <PhoneCall size={17} />
+    </span>
   );
 }
 
@@ -916,9 +913,9 @@ function NumberField({ label, value, onChange, step = "1" }) {
 
 function SummaryTile({ label, value }) {
   return (
-    <div className="panel p-4">
-      <div className="text-xs font-semibold uppercase tracking-normal text-stone-600">{label}</div>
-      <div className="mt-1 text-2xl font-bold text-stone-950">{value}</div>
+    <div className="p-4 panel">
+      <div className="font-semibold text-stone-600 text-xs uppercase tracking-normal">{label}</div>
+      <div className="mt-1 font-bold text-stone-950 text-2xl">{value}</div>
     </div>
   );
 }

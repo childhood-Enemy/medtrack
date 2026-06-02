@@ -110,7 +110,7 @@ class SQLiteStoreTests(unittest.TestCase):
                 "supplierId": supplier["id"],
                 "orderDate": "2026-06-01",
                 "expectedDeliveryDate": "2026-06-05",
-                "status": "awaiting_confirmation",
+                "status": "awaiting confirmation",
                 "discountAmount": "5.00",
                 "items": [
                     {
