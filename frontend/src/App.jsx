@@ -1,0 +1,953 @@
+import {
+  AlertTriangle,
+  Archive,
+  CheckCircle2,
+  ClipboardList,
+  FileText,
+  Home,
+  Package,
+  Pill,
+  Plus,
+  Printer,
+  RefreshCcw,
+  Save,
+  Trash2,
+  Truck,
+  X,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { api, apiUrl } from "./api.js";
+import { money, todayInputDate } from "./utils.js";
+
+const STATUS_OPTIONS = [
+  "draft",
+  "sent",
+  "awaiting_confirmation",
+  "confirmed",
+  "partially_received",
+  "received",
+  "cancelled",
+  "overdue",
+];
+
+function uid() {
+  return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+}
+
+function newSalesLine() {
+  return { id: uid(), medicineId: "", qtySold: "1", unitPrice: "", discountAmount: "0" };
+}
+
+function newSupplierLine() {
+  return { id: uid(), medicineId: "", qtyOrdered: "1", committedUnitPrice: "", discountAmount: "0" };
+}
+
+function emptyMedicineForm() {
+  return {
+    skuCode: "",
+    skuName: "",
+    medicineName: "",
+    category: "",
+    brand: "",
+    form: "",
+    strength: "",
+    packSize: "",
+    costPrice: "",
+    sellingPrice: "",
+    currentUnits: "0",
+    replenishmentLevel: "0",
+    refillBufferUnits: "0",
+  };
+}
+
+function emptySupplierForm() {
+  return { supplierName: "", phone: "", contactPerson: "", reliabilityRating: "3" };
+}
+
+export default function App() {
+  const [view, setView] = useState("home");
+  const [homeSummary, setHomeSummary] = useState(null);
+  const [medicines, setMedicines] = useState([]);
+  const [inventory, setInventory] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [salesOrders, setSalesOrders] = useState([]);
+  const [supplierOrders, setSupplierOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState("");
+
+  const refreshAll = useCallback(async () => {
+    setLoading(true);
+    setApiError("");
+    try {
+      const [summary, medicineRows, inventoryRows, supplierRows, salesRows, supplierOrderRows] = await Promise.all([
+        api("/home/summary"),
+        api("/medicines"),
+        api("/inventory"),
+        api("/suppliers"),
+        api("/sales-orders"),
+        api("/supplier-orders"),
+      ]);
+      setHomeSummary(summary);
+      setMedicines(medicineRows);
+      setInventory(inventoryRows);
+      setSuppliers(supplierRows);
+      setSalesOrders(salesRows);
+      setSupplierOrders(supplierOrderRows);
+    } catch (error) {
+      setApiError(error.message || "Unable to connect to the MEDTRACK backend.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshAll();
+  }, [refreshAll]);
+
+  return (
+    <div className="min-h-screen">
+      <header className="border-b border-stone-300 bg-white">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="text-2xl font-bold tracking-normal text-stone-950">MEDTRACK</div>
+            <div className="text-sm text-stone-600">Inventory, sales receipts, and supplier order follow-up</div>
+          </div>
+          <nav className="flex flex-wrap gap-2">
+            <NavButton active={view === "home"} icon={Home} label="Home" onClick={() => setView("home")} />
+            <NavButton active={view === "orders"} icon={ClipboardList} label="Orders" onClick={() => setView("orders")} />
+            <NavButton active={view === "invoice"} icon={FileText} label="Invoice" onClick={() => setView("invoice")} />
+            <NavButton active={view === "medicines"} icon={Pill} label="Medicines" onClick={() => setView("medicines")} />
+          </nav>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-7xl px-4 py-5">
+        <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <StatusBar summary={homeSummary} loading={loading} error={apiError} />
+          <button className="btn" onClick={refreshAll} type="button">
+            <RefreshCcw size={18} />
+            Refresh
+          </button>
+        </div>
+
+        {view === "home" && <HomePage summary={homeSummary} loading={loading} />}
+        {view === "orders" && <OrdersPage medicines={medicines} salesOrders={salesOrders} onChanged={refreshAll} />}
+        {view === "invoice" && (
+          <InvoicePage
+            medicines={medicines}
+            suppliers={suppliers}
+            supplierOrders={supplierOrders}
+            onChanged={refreshAll}
+          />
+        )}
+        {view === "medicines" && (
+          <MedicinesPage medicines={medicines} inventory={inventory} onChanged={refreshAll} />
+        )}
+      </main>
+    </div>
+  );
+}
+
+function NavButton({ active, icon: Icon, label, onClick }) {
+  return (
+    <button
+      className={`btn ${active ? "border-stone-950 bg-stone-950 text-white hover:bg-stone-900" : ""}`}
+      onClick={onClick}
+      type="button"
+    >
+      <Icon size={18} />
+      {label}
+    </button>
+  );
+}
+
+function StatusBar({ summary, loading, error }) {
+  if (error) {
+    return <InlineAlert tone="error" text={error} />;
+  }
+  if (loading || !summary) {
+    return <div className="text-sm text-stone-600">Loading SQLite data...</div>;
+  }
+  return (
+    <div className="flex flex-wrap gap-2 text-sm">
+      <Metric label="Today Sales" value={`Rs ${money(summary.todaySalesValue)}`} />
+      <Metric label="YTD Sales" value={`Rs ${money(summary.ytdSalesValue)}`} />
+      <Metric label="Today Qty" value={summary.todayQtySold} />
+      <Metric label="Alerts" value={summary.alerts?.length || 0} tone={summary.alerts?.length ? "warn" : "ok"} />
+    </div>
+  );
+}
+
+function HomePage({ summary, loading }) {
+  if (loading || !summary) {
+    return <div className="panel p-4 text-sm text-stone-600">Loading home summary...</div>;
+  }
+
+  return (
+    <section className="space-y-4">
+      <div className="grid gap-3 md:grid-cols-4">
+        <SummaryTile label="Sales Today" value={`Rs ${money(summary.todaySalesValue)}`} />
+        <SummaryTile label="Sales YTD" value={`Rs ${money(summary.ytdSalesValue)}`} />
+        <SummaryTile label="Qty Today" value={summary.todayQtySold} />
+        <SummaryTile label="Qty YTD" value={summary.ytdQtySold} />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+        <AlertPanel alerts={summary.alerts || []} />
+        <PendingSupplierPanel
+          orders={summary.pendingSupplierOrders || []}
+          total={summary.pendingSupplierOrdersTotal || 0}
+          page={summary.pendingSupplierOrdersPage || 1}
+          pageSize={summary.pendingSupplierOrdersPageSize || 10}
+        />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <InventoryAlertTable title="Low Supply" icon={AlertTriangle} rows={summary.lowStockMedicines || []} />
+        <InventoryAlertTable title="Refill Soon" icon={Package} rows={summary.refillSoonMedicines || []} />
+      </div>
+    </section>
+  );
+}
+
+function AlertPanel({ alerts }) {
+  return (
+    <div className="panel overflow-hidden">
+      <div className="flex items-center gap-2 border-b border-stone-200 px-4 py-3">
+        <AlertTriangle size={20} />
+        <h2 className="text-lg font-bold text-stone-950">Operational Alerts</h2>
+      </div>
+      <div className="space-y-2 p-4">
+        {alerts.map((alert) => (
+          <div
+            className={`rounded-md border px-3 py-2 text-sm ${
+              alert.severity === "critical"
+                ? "border-red-300 bg-red-50 text-red-800"
+                : "border-amber-300 bg-amber-50 text-amber-900"
+            }`}
+            key={alert.alertKey}
+          >
+            <div className="font-semibold">{alert.alertType}</div>
+            <div>{alert.message}</div>
+          </div>
+        ))}
+        {alerts.length === 0 && <div className="text-sm text-stone-600">No active alerts.</div>}
+      </div>
+    </div>
+  );
+}
+
+function PendingSupplierPanel({ orders, total, page, pageSize }) {
+  return (
+    <div className="panel overflow-hidden">
+      <div className="flex items-center gap-2 border-b border-stone-200 px-4 py-3">
+        <Truck size={20} />
+        <h2 className="text-lg font-bold text-stone-950">Supplier Orders To Confirm</h2>
+      </div>
+      <div className="overflow-auto">
+        <table className="min-w-[680px] w-full border-collapse">
+          <thead className="table-head">
+            <tr>
+              <th className="px-3 py-2">PO</th>
+              <th className="px-3 py-2">Supplier</th>
+              <th className="px-3 py-2">Phone</th>
+              <th className="px-3 py-2">Deadline</th>
+              <th className="px-3 py-2">Value</th>
+              <th className="px-3 py-2">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {orders.map((order) => (
+              <tr className="bg-white" key={order.id}>
+                <td className="table-cell font-semibold">{order.poNo}</td>
+                <td className="table-cell">{order.supplierName}</td>
+                <td className="table-cell">{order.followUpPhone || order.supplierPhone || "-"}</td>
+                <td className="table-cell">{order.expectedDeliveryDate}</td>
+                <td className="table-cell">Rs {money(order.totalCommittedValue)}</td>
+                <td className="table-cell">{order.status}</td>
+              </tr>
+            ))}
+            {orders.length === 0 && (
+              <tr>
+                <td className="table-cell text-stone-600" colSpan="6">No supplier orders awaiting confirmation.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <div className="border-t border-stone-200 px-4 py-2 text-xs text-stone-600">
+        Page {page}; showing up to {pageSize} of {total}.
+      </div>
+    </div>
+  );
+}
+
+function InventoryAlertTable({ title, icon: Icon, rows }) {
+  return (
+    <div className="panel overflow-hidden">
+      <div className="flex items-center gap-2 border-b border-stone-200 px-4 py-3">
+        <Icon size={20} />
+        <h2 className="text-lg font-bold text-stone-950">{title}</h2>
+      </div>
+      <div className="overflow-auto">
+        <table className="min-w-[520px] w-full border-collapse">
+          <thead className="table-head">
+            <tr>
+              <th className="px-3 py-2">SKU</th>
+              <th className="px-3 py-2">Medicine</th>
+              <th className="px-3 py-2">Units</th>
+              <th className="px-3 py-2">Level</th>
+              <th className="px-3 py-2">Buffer</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr className="bg-white" key={row.medicineId}>
+                <td className="table-cell font-semibold">{row.skuCode}</td>
+                <td className="table-cell">{row.medicineName}</td>
+                <td className="table-cell">{row.currentUnits}</td>
+                <td className="table-cell">{row.replenishmentLevel}</td>
+                <td className="table-cell">{row.refillBufferUnits}</td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td className="table-cell text-stone-600" colSpan="5">No medicines in this category.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function OrdersPage({ medicines, salesOrders, onChanged }) {
+  const [form, setForm] = useState({
+    orderDate: todayInputDate(),
+    customerName: "",
+    customerPhone: "",
+    discountAmount: "0",
+  });
+  const [lines, setLines] = useState([newSalesLine()]);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const medicineById = useMemo(() => new Map(medicines.map((medicine) => [String(medicine.id), medicine])), [medicines]);
+
+  const updateLine = (lineId, patch) => {
+    setLines((current) => current.map((line) => (line.id === lineId ? { ...line, ...patch } : line)));
+  };
+
+  const selectMedicine = (lineId, medicineId) => {
+    const medicine = medicineById.get(String(medicineId));
+    updateLine(lineId, { medicineId, unitPrice: medicine?.sellingPrice || "" });
+  };
+
+  const submitOrder = async (event) => {
+    event.preventDefault();
+    setMessage("");
+    setError("");
+    try {
+      const result = await api("/sales-orders", {
+        method: "POST",
+        body: JSON.stringify({
+          ...form,
+          items: lines.map(({ medicineId, qtySold, unitPrice, discountAmount }) => ({
+            medicineId,
+            qtySold,
+            unitPrice,
+            discountAmount,
+          })),
+        }),
+      });
+      setMessage(`Saved ${result.orderNo}. Receipt PDF is ready.`);
+      setLines([newSalesLine()]);
+      setForm({ orderDate: todayInputDate(), customerName: "", customerPhone: "", discountAmount: "0" });
+      await onChanged();
+      window.open(apiUrl(result.receiptUrl), "_blank", "noopener");
+    } catch (apiError) {
+      setError((apiError.errors || [apiError.message || "Sales order failed."]).join(" "));
+    }
+  };
+
+  return (
+    <section className="grid gap-4 lg:grid-cols-[1fr_430px]">
+      <form className="panel p-4" onSubmit={submitOrder}>
+        <div className="mb-4">
+          <h1 className="text-xl font-bold text-stone-950">Orders</h1>
+          <p className="text-sm text-stone-600">Create multi-medicine customer orders and print PDF receipts.</p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-4">
+          <DateField label="Order Date" value={form.orderDate} onChange={(value) => setForm({ ...form, orderDate: value })} />
+          <TextField label="Customer Name" value={form.customerName} onChange={(value) => setForm({ ...form, customerName: value })} />
+          <TextField label="Customer Phone" value={form.customerPhone} onChange={(value) => setForm({ ...form, customerPhone: value })} />
+          <NumberField label="Order Discount" value={form.discountAmount} onChange={(value) => setForm({ ...form, discountAmount: value })} step="0.01" />
+        </div>
+
+        <div className="mt-4 space-y-3">
+          {lines.map((line, index) => (
+            <div className="rounded-md border border-stone-300 bg-stone-50 p-3" key={line.id}>
+              <div className="mb-2 flex items-center justify-between">
+                <div className="font-semibold">Medicine {index + 1}</div>
+                <button className="btn h-8 px-2" disabled={lines.length === 1} onClick={() => setLines(lines.filter((item) => item.id !== line.id))} type="button">
+                  <Trash2 size={16} />
+                  Remove
+                </button>
+              </div>
+              <div className="grid gap-3 md:grid-cols-[2fr_100px_120px_120px]">
+                <MedicineSelect medicines={medicines} value={line.medicineId} onChange={(value) => selectMedicine(line.id, value)} />
+                <NumberField label="Qty" value={line.qtySold} onChange={(value) => updateLine(line.id, { qtySold: value })} />
+                <NumberField label="Unit Price" value={line.unitPrice} onChange={(value) => updateLine(line.id, { unitPrice: value })} step="0.01" />
+                <NumberField label="Discount" value={line.discountAmount} onChange={(value) => updateLine(line.id, { discountAmount: value })} step="0.01" />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-4 flex flex-col gap-3 md:flex-row md:justify-between">
+          <button className="btn" onClick={() => setLines([...lines, newSalesLine()])} type="button">
+            <Plus size={18} />
+            Add Medicine
+          </button>
+          <button className="btn btn-primary" type="submit">
+            <Save size={18} />
+            Save Order And Print Receipt
+          </button>
+        </div>
+        {message && <InlineAlert tone="ok" text={message} />}
+        {error && <InlineAlert tone="error" text={error} />}
+      </form>
+
+      <RecentSalesOrders orders={salesOrders} />
+    </section>
+  );
+}
+
+function RecentSalesOrders({ orders }) {
+  return (
+    <div className="panel overflow-hidden">
+      <div className="border-b border-stone-200 px-4 py-3">
+        <h2 className="text-lg font-bold text-stone-950">Recent Receipts</h2>
+      </div>
+      <div className="max-h-[720px] overflow-auto">
+        {orders.map((order) => (
+          <div className="border-b border-stone-200 p-3" key={order.id}>
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <div className="font-semibold">{order.orderNo}</div>
+                <div className="text-xs text-stone-600">{order.orderDate} | Rs {money(order.totalAmount)}</div>
+              </div>
+              <button className="btn h-9" onClick={() => window.open(apiUrl(order.receiptUrl), "_blank", "noopener")} type="button">
+                <Printer size={16} />
+                PDF
+              </button>
+            </div>
+          </div>
+        ))}
+        {orders.length === 0 && <div className="p-4 text-sm text-stone-600">No sales orders yet.</div>}
+      </div>
+    </div>
+  );
+}
+
+function InvoicePage({ medicines, suppliers, supplierOrders, onChanged }) {
+  const [supplierForm, setSupplierForm] = useState(emptySupplierForm());
+  const [orderForm, setOrderForm] = useState({
+    supplierId: "",
+    orderDate: todayInputDate(),
+    expectedDeliveryDate: todayInputDate(),
+    status: "sent",
+    discountAmount: "0",
+    notes: "",
+  });
+  const [lines, setLines] = useState([newSupplierLine()]);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const medicineById = useMemo(() => new Map(medicines.map((medicine) => [String(medicine.id), medicine])), [medicines]);
+
+  const saveSupplier = async (event) => {
+    event.preventDefault();
+    setMessage("");
+    setError("");
+    try {
+      await api("/suppliers", { method: "POST", body: JSON.stringify(supplierForm) });
+      setSupplierForm(emptySupplierForm());
+      setMessage("Supplier saved.");
+      await onChanged();
+    } catch (apiError) {
+      setError((apiError.errors || [apiError.message || "Supplier save failed."]).join(" "));
+    }
+  };
+
+  const updateLine = (lineId, patch) => {
+    setLines((current) => current.map((line) => (line.id === lineId ? { ...line, ...patch } : line)));
+  };
+
+  const selectMedicine = (lineId, medicineId) => {
+    const medicine = medicineById.get(String(medicineId));
+    updateLine(lineId, { medicineId, committedUnitPrice: medicine?.costPrice || "" });
+  };
+
+  const saveSupplierOrder = async (event) => {
+    event.preventDefault();
+    setMessage("");
+    setError("");
+    try {
+      const result = await api("/supplier-orders", {
+        method: "POST",
+        body: JSON.stringify({
+          ...orderForm,
+          items: lines.map(({ medicineId, qtyOrdered, committedUnitPrice, discountAmount }) => ({
+            medicineId,
+            qtyOrdered,
+            committedUnitPrice,
+            discountAmount,
+          })),
+        }),
+      });
+      setMessage(`Saved ${result.poNo}. Supplier invoice PDF is ready.`);
+      setLines([newSupplierLine()]);
+      setOrderForm({
+        supplierId: "",
+        orderDate: todayInputDate(),
+        expectedDeliveryDate: todayInputDate(),
+        status: "sent",
+        discountAmount: "0",
+        notes: "",
+      });
+      await onChanged();
+      window.open(apiUrl(result.invoiceUrl), "_blank", "noopener");
+    } catch (apiError) {
+      setError((apiError.errors || [apiError.message || "Supplier order failed."]).join(" "));
+    }
+  };
+
+  return (
+    <section className="space-y-4">
+      <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
+        <form className="panel p-4" onSubmit={saveSupplier}>
+          <h1 className="mb-1 text-xl font-bold text-stone-950">Suppliers</h1>
+          <p className="mb-4 text-sm text-stone-600">Add suppliers with follow-up phone and reliability rating.</p>
+          <div className="grid gap-3">
+            <TextField label="Supplier Name" value={supplierForm.supplierName} onChange={(value) => setSupplierForm({ ...supplierForm, supplierName: value })} />
+            <TextField label="Phone" value={supplierForm.phone} onChange={(value) => setSupplierForm({ ...supplierForm, phone: value })} />
+            <TextField label="Contact Person" value={supplierForm.contactPerson} onChange={(value) => setSupplierForm({ ...supplierForm, contactPerson: value })} />
+            <NumberField label="Reliability 1-5" value={supplierForm.reliabilityRating} onChange={(value) => setSupplierForm({ ...supplierForm, reliabilityRating: value })} />
+          </div>
+          <button className="btn btn-primary mt-4 w-full" type="submit">
+            <Save size={18} />
+            Save Supplier
+          </button>
+        </form>
+
+        <form className="panel p-4" onSubmit={saveSupplierOrder}>
+          <h1 className="mb-1 text-xl font-bold text-stone-950">Supplier Order Invoice</h1>
+          <p className="mb-4 text-sm text-stone-600">Place supplier orders, track confirmation, deadlines, and receipts.</p>
+          <div className="grid gap-3 md:grid-cols-5">
+            <div>
+              <label className="label">Supplier</label>
+              <select className="field" value={orderForm.supplierId} onChange={(event) => setOrderForm({ ...orderForm, supplierId: event.target.value })}>
+                <option value="">Select supplier</option>
+                {suppliers.map((supplier) => (
+                  <option key={supplier.id} value={supplier.id}>{supplier.supplierName}</option>
+                ))}
+              </select>
+            </div>
+            <DateField label="Order Date" value={orderForm.orderDate} onChange={(value) => setOrderForm({ ...orderForm, orderDate: value })} />
+            <DateField label="Deadline" value={orderForm.expectedDeliveryDate} onChange={(value) => setOrderForm({ ...orderForm, expectedDeliveryDate: value })} />
+            <div>
+              <label className="label">Status</label>
+              <select className="field" value={orderForm.status} onChange={(event) => setOrderForm({ ...orderForm, status: event.target.value })}>
+                {STATUS_OPTIONS.map((status) => <option key={status} value={status}>{status}</option>)}
+              </select>
+            </div>
+            <NumberField label="Order Discount" value={orderForm.discountAmount} onChange={(value) => setOrderForm({ ...orderForm, discountAmount: value })} step="0.01" />
+          </div>
+          <div className="mt-3">
+            <TextField label="Notes" value={orderForm.notes} onChange={(value) => setOrderForm({ ...orderForm, notes: value })} />
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {lines.map((line, index) => (
+              <div className="rounded-md border border-stone-300 bg-stone-50 p-3" key={line.id}>
+                <div className="mb-2 flex items-center justify-between">
+                  <div className="font-semibold">Supplier Item {index + 1}</div>
+                  <button className="btn h-8 px-2" disabled={lines.length === 1} onClick={() => setLines(lines.filter((item) => item.id !== line.id))} type="button">
+                    <Trash2 size={16} />
+                    Remove
+                  </button>
+                </div>
+                <div className="grid gap-3 md:grid-cols-[2fr_110px_140px_120px]">
+                  <MedicineSelect medicines={medicines} value={line.medicineId} onChange={(value) => selectMedicine(line.id, value)} />
+                  <NumberField label="Qty" value={line.qtyOrdered} onChange={(value) => updateLine(line.id, { qtyOrdered: value })} />
+                  <NumberField label="Committed Price" value={line.committedUnitPrice} onChange={(value) => updateLine(line.id, { committedUnitPrice: value })} step="0.01" />
+                  <NumberField label="Discount" value={line.discountAmount} onChange={(value) => updateLine(line.id, { discountAmount: value })} step="0.01" />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 flex flex-col gap-3 md:flex-row md:justify-between">
+            <button className="btn" onClick={() => setLines([...lines, newSupplierLine()])} type="button">
+              <Plus size={18} />
+              Add Item
+            </button>
+            <button className="btn btn-primary" type="submit">
+              <Save size={18} />
+              Save Supplier Order
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {message && <InlineAlert tone="ok" text={message} />}
+      {error && <InlineAlert tone="error" text={error} />}
+      <SupplierOrderTable orders={supplierOrders} onChanged={onChanged} />
+    </section>
+  );
+}
+
+function SupplierOrderTable({ orders, onChanged }) {
+  const [error, setError] = useState("");
+
+  const updateStatus = async (orderId, status) => {
+    setError("");
+    try {
+      await api(`/supplier-orders/${orderId}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
+      await onChanged();
+    } catch (apiError) {
+      setError((apiError.errors || [apiError.message || "Status update failed."]).join(" "));
+    }
+  };
+
+  const receiveAll = async (orderId) => {
+    setError("");
+    try {
+      await api(`/supplier-orders/${orderId}/receive`, { method: "POST", body: JSON.stringify({}) });
+      await onChanged();
+    } catch (apiError) {
+      setError((apiError.errors || [apiError.message || "Receive failed."]).join(" "));
+    }
+  };
+
+  return (
+    <div className="panel overflow-hidden">
+      <div className="border-b border-stone-200 px-4 py-3">
+        <h2 className="text-lg font-bold text-stone-950">Supplier Order Status</h2>
+      </div>
+      {error && <InlineAlert tone="error" text={error} />}
+      <div className="overflow-auto">
+        <table className="min-w-[1120px] w-full border-collapse">
+          <thead className="table-head">
+            <tr>
+              <th className="px-3 py-2">PO</th>
+              <th className="px-3 py-2">Supplier</th>
+              <th className="px-3 py-2">Phone</th>
+              <th className="px-3 py-2">Deadline</th>
+              <th className="px-3 py-2">Qty</th>
+              <th className="px-3 py-2">Value</th>
+              <th className="px-3 py-2">Reliability</th>
+              <th className="px-3 py-2">Status</th>
+              <th className="px-3 py-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {orders.map((order) => {
+              const qtyOrdered = order.items.reduce((total, item) => total + Number(item.qtyOrdered || 0), 0);
+              const qtyReceived = order.items.reduce((total, item) => total + Number(item.qtyReceived || 0), 0);
+              return (
+                <tr className="bg-white" key={order.id}>
+                  <td className="table-cell font-semibold">{order.poNo}</td>
+                  <td className="table-cell">{order.supplierName}</td>
+                  <td className="table-cell">{order.followUpPhone || order.supplierPhone || "-"}</td>
+                  <td className="table-cell">{order.expectedDeliveryDate}</td>
+                  <td className="table-cell">{qtyReceived}/{qtyOrdered}</td>
+                  <td className="table-cell">Rs {money(order.totalCommittedValue)}</td>
+                  <td className="table-cell">{order.reliabilitySnapshot}/5</td>
+                  <td className="table-cell">
+                    <select className="field h-9 min-w-44" value={order.status} onChange={(event) => updateStatus(order.id, event.target.value)}>
+                      {STATUS_OPTIONS.map((status) => <option key={status} value={status}>{status}</option>)}
+                    </select>
+                  </td>
+                  <td className="table-cell">
+                    <div className="flex gap-2">
+                      <button className="btn h-9" onClick={() => receiveAll(order.id)} type="button" disabled={order.status === "received" || order.status === "cancelled"}>
+                        <Package size={16} />
+                        Receive
+                      </button>
+                      <button className="btn h-9" onClick={() => window.open(apiUrl(order.invoiceUrl), "_blank", "noopener")} type="button">
+                        <Printer size={16} />
+                        PDF
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+            {orders.length === 0 && (
+              <tr>
+                <td className="table-cell text-stone-600" colSpan="9">No supplier orders yet.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function MedicinesPage({ medicines, inventory, onChanged }) {
+  const [form, setForm] = useState(emptyMedicineForm());
+  const [editingId, setEditingId] = useState(null);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const saveMedicine = async (event) => {
+    event.preventDefault();
+    setMessage("");
+    setError("");
+    try {
+      if (editingId) {
+        await api(`/medicines/${editingId}`, { method: "PUT", body: JSON.stringify(form) });
+        await api(`/inventory/${editingId}/correction`, {
+          method: "POST",
+          body: JSON.stringify({
+            currentUnits: form.currentUnits,
+            replenishmentLevel: form.replenishmentLevel,
+            refillBufferUnits: form.refillBufferUnits,
+          }),
+        });
+        setMessage("Medicine updated.");
+      } else {
+        await api("/medicines", { method: "POST", body: JSON.stringify(form) });
+        setMessage("Medicine created.");
+      }
+      setForm(emptyMedicineForm());
+      setEditingId(null);
+      await onChanged();
+    } catch (apiError) {
+      setError((apiError.errors || [apiError.message || "Medicine save failed."]).join(" "));
+    }
+  };
+
+  const editMedicine = (medicine) => {
+    setEditingId(medicine.id);
+    setForm({
+      skuCode: medicine.skuCode,
+      skuName: medicine.skuName,
+      medicineName: medicine.medicineName,
+      category: medicine.category,
+      brand: medicine.brand,
+      form: medicine.form,
+      strength: medicine.strength,
+      packSize: medicine.packSize,
+      costPrice: medicine.costPrice,
+      sellingPrice: medicine.sellingPrice,
+      currentUnits: String(medicine.currentUnits ?? 0),
+      replenishmentLevel: String(medicine.replenishmentLevel ?? 0),
+      refillBufferUnits: String(medicine.refillBufferUnits ?? 0),
+    });
+    setMessage("");
+    setError("");
+  };
+
+  const archiveMedicine = async (medicineId) => {
+    if (!window.confirm("Archive this medicine? It will be hidden from new orders but kept in history.")) {
+      return;
+    }
+    setMessage("");
+    setError("");
+    try {
+      await api(`/medicines/${medicineId}`, { method: "DELETE" });
+      setMessage("Medicine archived.");
+      await onChanged();
+    } catch (apiError) {
+      setError((apiError.errors || [apiError.message || "Archive failed."]).join(" "));
+    }
+  };
+
+  return (
+    <section className="grid gap-4 lg:grid-cols-[430px_1fr]">
+      <form className="panel p-4" onSubmit={saveMedicine}>
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-bold text-stone-950">Medicines</h1>
+            <p className="text-sm text-stone-600">Create, update, or archive medicines and stock thresholds.</p>
+          </div>
+          {editingId && (
+            <button className="btn h-9" onClick={() => { setEditingId(null); setForm(emptyMedicineForm()); }} type="button">
+              <X size={16} />
+              Clear
+            </button>
+          )}
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          <TextField label="SKU Code" value={form.skuCode} onChange={(value) => setForm({ ...form, skuCode: value })} />
+          <TextField label="SKU Name" value={form.skuName} onChange={(value) => setForm({ ...form, skuName: value })} />
+          <TextField label="Medicine Name" value={form.medicineName} onChange={(value) => setForm({ ...form, medicineName: value })} />
+          <TextField label="Brand" value={form.brand} onChange={(value) => setForm({ ...form, brand: value })} />
+          <TextField label="Category" value={form.category} onChange={(value) => setForm({ ...form, category: value })} />
+          <TextField label="Form" value={form.form} onChange={(value) => setForm({ ...form, form: value })} />
+          <TextField label="Strength" value={form.strength} onChange={(value) => setForm({ ...form, strength: value })} />
+          <TextField label="Pack Size" value={form.packSize} onChange={(value) => setForm({ ...form, packSize: value })} />
+          <NumberField label="Cost Price" value={form.costPrice} onChange={(value) => setForm({ ...form, costPrice: value })} step="0.01" />
+          <NumberField label="Selling Price" value={form.sellingPrice} onChange={(value) => setForm({ ...form, sellingPrice: value })} step="0.01" />
+          <NumberField label="Current Units" value={form.currentUnits} onChange={(value) => setForm({ ...form, currentUnits: value })} />
+          <NumberField label="Replenishment Level" value={form.replenishmentLevel} onChange={(value) => setForm({ ...form, replenishmentLevel: value })} />
+          <NumberField label="Refill Buffer" value={form.refillBufferUnits} onChange={(value) => setForm({ ...form, refillBufferUnits: value })} />
+        </div>
+        <button className="btn btn-primary mt-4 w-full" type="submit">
+          <Save size={18} />
+          {editingId ? "Update Medicine" : "Create Medicine"}
+        </button>
+        {message && <InlineAlert tone="ok" text={message} />}
+        {error && <InlineAlert tone="error" text={error} />}
+      </form>
+
+      <div className="panel overflow-hidden">
+        <div className="border-b border-stone-200 px-4 py-3">
+          <h2 className="text-lg font-bold text-stone-950">Medicine Stock</h2>
+        </div>
+        <div className="overflow-auto">
+          <table className="min-w-[980px] w-full border-collapse">
+            <thead className="table-head">
+              <tr>
+                <th className="px-3 py-2">SKU</th>
+                <th className="px-3 py-2">Medicine</th>
+                <th className="px-3 py-2">Brand</th>
+                <th className="px-3 py-2">Units</th>
+                <th className="px-3 py-2">Level</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Price</th>
+                <th className="px-3 py-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {medicines.map((medicine) => {
+                const stock = inventory.find((row) => row.medicineId === medicine.id);
+                return (
+                  <tr className="bg-white" key={medicine.id}>
+                    <td className="table-cell font-semibold">{medicine.skuCode}</td>
+                    <td className="table-cell">{medicine.medicineName}</td>
+                    <td className="table-cell">{medicine.brand}</td>
+                    <td className="table-cell">{stock?.currentUnits ?? medicine.currentUnits ?? 0}</td>
+                    <td className="table-cell">{stock?.replenishmentLevel ?? medicine.replenishmentLevel ?? 0}</td>
+                    <td className="table-cell">{stock?.status || "OK"}</td>
+                    <td className="table-cell">Rs {money(medicine.sellingPrice)}</td>
+                    <td className="table-cell">
+                      <div className="flex gap-2">
+                        <button className="btn h-9" onClick={() => editMedicine(medicine)} type="button">
+                          <Save size={16} />
+                          Edit
+                        </button>
+                        <button className="btn btn-danger h-9" onClick={() => archiveMedicine(medicine.id)} type="button">
+                          <Archive size={16} />
+                          Archive
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {medicines.length === 0 && (
+                <tr>
+                  <td className="table-cell text-stone-600" colSpan="8">No active medicines yet.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MedicineSelect({ medicines, value, onChange }) {
+  return (
+    <div>
+      <label className="label">Medicine</label>
+      <select className="field" value={value} onChange={(event) => onChange(event.target.value)}>
+        <option value="">Select medicine</option>
+        {medicines.map((medicine) => (
+          <option key={medicine.id} value={medicine.id}>
+            {medicine.skuCode} - {medicine.skuName} ({medicine.currentUnits ?? 0} units)
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function TextField({ label, value, onChange }) {
+  return (
+    <div>
+      <label className="label">{label}</label>
+      <input className="field" value={value} onChange={(event) => onChange(event.target.value)} />
+    </div>
+  );
+}
+
+function DateField({ label, value, onChange }) {
+  return (
+    <div>
+      <label className="label">{label}</label>
+      <input className="field" type="date" value={value} onChange={(event) => onChange(event.target.value)} />
+    </div>
+  );
+}
+
+function NumberField({ label, value, onChange, step = "1" }) {
+  return (
+    <div>
+      <label className="label">{label}</label>
+      <input
+        className="field"
+        inputMode="decimal"
+        onChange={(event) => onChange(event.target.value)}
+        step={step}
+        type="number"
+        value={value}
+      />
+    </div>
+  );
+}
+
+function SummaryTile({ label, value }) {
+  return (
+    <div className="panel p-4">
+      <div className="text-xs font-semibold uppercase tracking-normal text-stone-600">{label}</div>
+      <div className="mt-1 text-2xl font-bold text-stone-950">{value}</div>
+    </div>
+  );
+}
+
+function Metric({ label, value, tone = "default" }) {
+  const toneClass =
+    tone === "warn"
+      ? "border-amber-400 bg-amber-50 text-amber-900"
+      : tone === "ok"
+        ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+        : "border-stone-300 bg-white text-stone-800";
+  return (
+    <div className={`rounded-md border px-3 py-2 ${toneClass}`}>
+      <span className="font-semibold">{label}:</span> {value}
+    </div>
+  );
+}
+
+function InlineAlert({ tone, text }) {
+  const classes =
+    tone === "error"
+      ? "border-red-300 bg-red-50 text-red-800"
+      : tone === "warn"
+        ? "border-amber-300 bg-amber-50 text-amber-900"
+        : "border-emerald-300 bg-emerald-50 text-emerald-900";
+  return (
+    <div className={`mt-3 flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${classes}`}>
+      {tone === "error" || tone === "warn" ? <AlertTriangle size={18} /> : <CheckCircle2 size={18} />}
+      {text}
+    </div>
+  );
+}
