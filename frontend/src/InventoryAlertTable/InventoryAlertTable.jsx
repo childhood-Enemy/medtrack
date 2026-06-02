@@ -18,7 +18,6 @@ const InventoryAlertTable = ({ title, icon: Icon, rows, bg }) => {
             key: "unitsToReorder",
         }
     ];
-    console.log("rows", rows);
     const rowsWithReorderQty = map(rows, (row) => (
         {
             ...row,

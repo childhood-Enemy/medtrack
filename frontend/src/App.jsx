@@ -20,8 +20,9 @@ import { PillButton } from "./Pill/PillButton.jsx";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, apiUrl } from "./api.js";
 import { money, todayInputDate } from "./utils.js";
-import { get } from "lodash";
+import { get, map } from "lodash";
 import InventoryAlertTable from "./InventoryAlertTable/InventoryAlertTable.jsx";
+import MedicineSelect from "./commons/MedicineSelect/MedicineSelect.jsx";
 
 const STATUS_OPTIONS = [
   "draft",
@@ -339,25 +340,30 @@ function OrdersPage({ medicines, salesOrders, onChanged }) {
           <TextField label="Customer Phone" value={form.customerPhone} onChange={(value) => setForm({ ...form, customerPhone: value })} />
           <NumberField label="Order Discount" value={form.discountAmount} onChange={(value) => setForm({ ...form, discountAmount: value })} step="0.01" />
         </div>
-
+        {/* Order Table */}
         <div className="space-y-3 mt-4">
-          {lines.map((line, index) => (
-            <div className="bg-stone-50 p-3 border border-stone-300 rounded-md" key={line.id}>
-              <div className="flex justify-between items-center mb-2">
-                <div className="font-semibold">Medicine {index + 1}</div>
-                <button className="px-2 h-8 btn" disabled={lines.length === 1} onClick={() => setLines(lines.filter((item) => item.id !== line.id))} type="button">
-                  <Trash2 size={16} />
-                  Remove
-                </button>
+          {map(lines, (line, index) => {
+            const { medicineId, qtySold, unitPrice, discountAmount } = line;
+            const linetotal = (Number(qtySold || 0) * Number(unitPrice || 0)) - Number(discountAmount || 0);
+            return (
+              <div className="bg-stone-50 p-3 border border-stone-300 rounded-md" key={line.id}>
+                <div className="flex justify-between items-center mb-2">
+                  <div className="font-semibold">Medicine {index + 1}</div>
+                  <button className="px-2 h-8 btn" disabled={lines.length === 1} onClick={() => setLines(lines.filter((item) => item.id !== line.id))} type="button">
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+                <div className="gap-3 grid md:grid-cols-[2fr_75px_75px_75px_75px]">
+                  <MedicineSelect medicines={medicines} value={line.medicineId} onChange={(value) => selectMedicine(line.id, value)} />
+                  <NumberField label="Qty" value={line.qtySold} onChange={(value) => updateLine(line.id, { qtySold: value })} />
+                  {/* onChange={(value) => updateLine(line.id, { unitPrice: value })} */}
+                  <NumberField label="Unit Price" value={line.unitPrice} readOnly />
+                  <NumberField label="Discount" value={line.discountAmount} onChange={(value) => updateLine(line.id, { discountAmount: value })} step="0.01" />
+                  <NumberField label="Line Total" value={linetotal} readOnly />
+                </div>
               </div>
-              <div className="gap-3 grid md:grid-cols-[2fr_100px_120px_120px]">
-                <MedicineSelect medicines={medicines} value={line.medicineId} onChange={(value) => selectMedicine(line.id, value)} />
-                <NumberField label="Qty" value={line.qtySold} onChange={(value) => updateLine(line.id, { qtySold: value })} />
-                <NumberField label="Unit Price" value={line.unitPrice} onChange={(value) => updateLine(line.id, { unitPrice: value })} step="0.01" />
-                <NumberField label="Discount" value={line.discountAmount} onChange={(value) => updateLine(line.id, { discountAmount: value })} step="0.01" />
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
 
         <div className="flex md:flex-row flex-col md:justify-between gap-3 mt-4">
@@ -523,25 +529,30 @@ function InvoicePage({ medicines, suppliers, supplierOrders, onChanged }) {
           <div className="mt-3">
             <TextField label="Notes" value={orderForm.notes} onChange={(value) => setOrderForm({ ...orderForm, notes: value })} />
           </div>
-
+          {/* Invoice Table */}
           <div className="space-y-3 mt-4">
-            {lines.map((line, index) => (
-              <div className="bg-stone-50 p-3 border border-stone-300 rounded-md" key={line.id}>
-                <div className="flex justify-between items-center mb-2">
-                  <div className="font-semibold">Supplier Item {index + 1}</div>
-                  <button className="px-2 h-8 btn" disabled={lines.length === 1} onClick={() => setLines(lines.filter((item) => item.id !== line.id))} type="button">
-                    <Trash2 size={16} />
-                    Remove
-                  </button>
+            {map(lines, (line, index) => {
+              const { medicineId, qtyOrdered, committedUnitPrice, discountAmount } = line;
+              const linetotal = (Number(qtyOrdered || 0) * Number(committedUnitPrice || 0)) - Number(discountAmount || 0);
+              return (
+                <div className="bg-stone-50 p-3 border border-stone-300 rounded-md" key={line.id}>
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="font-semibold">Supplier Item {index + 1}</div>
+                    <button className="px-2 h-8 btn" disabled={lines.length === 1} onClick={() => setLines(lines.filter((item) => item.id !== line.id))} type="button">
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                  <div className="gap-3 grid md:grid-cols-[2fr_75px_75px_75px_75px]">
+                    <MedicineSelect medicines={medicines} value={line.medicineId} onChange={(value) => selectMedicine(line.id, value)} />
+                    <NumberField label="Qty" value={line.qtyOrdered} onChange={(value) => updateLine(line.id, { qtyOrdered: value })} />
+                    <NumberField label="Committed Price" value={line.committedUnitPrice} readOnly/>
+                    <NumberField label="Discount" value={line.discountAmount} onChange={(value) => updateLine(line.id, { discountAmount: value })} step="0.01" />
+                    <NumberField label="Line Total" value={linetotal} readOnly/>
+                  </div>
                 </div>
-                <div className="gap-3 grid md:grid-cols-[2fr_110px_140px_120px]">
-                  <MedicineSelect medicines={medicines} value={line.medicineId} onChange={(value) => selectMedicine(line.id, value)} />
-                  <NumberField label="Qty" value={line.qtyOrdered} onChange={(value) => updateLine(line.id, { qtyOrdered: value })} />
-                  <NumberField label="Committed Price" value={line.committedUnitPrice} onChange={(value) => updateLine(line.id, { committedUnitPrice: value })} step="0.01" />
-                  <NumberField label="Discount" value={line.discountAmount} onChange={(value) => updateLine(line.id, { discountAmount: value })} step="0.01" />
-                </div>
-              </div>
-            ))}
+              )
+            }
+            )}
           </div>
 
           <div className="flex md:flex-row flex-col md:justify-between gap-3 mt-4">
@@ -813,21 +824,23 @@ function MedicinesPage({ medicines, inventory, onChanged }) {
   );
 }
 
-function MedicineSelect({ medicines, value, onChange }) {
+
+// Feature - 3: Changing this to allow search functionality in the medicine select dropdown for orders and supplier invoices
+/*function MedicineSelect({ medicines, value, onChange }) {
   return (
     <div>
       <label className="label">Medicine</label>
       <select className="field" value={value} onChange={(event) => onChange(event.target.value)}>
         <option value="">Select medicine</option>
-        {medicines.map((medicine) => (
+        {map(medicines, (medicine) => (
           <option key={medicine.id} value={medicine.id}>
-            {medicine.skuCode} - {medicine.skuName} ({medicine.currentUnits ?? 0} units)
+            {medicine.skuName} ({medicine.currentUnits ?? 0} units)
           </option>
         ))}
       </select>
     </div>
   );
-}
+}*/
 
 function CallIcon({ phone }) {
   if (!phone) {
