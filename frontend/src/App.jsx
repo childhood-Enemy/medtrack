@@ -28,21 +28,6 @@ import fieldFunctions from "./commons/Fields/Fields.jsx";
 import HomePage from "./HomePage/HomePage.jsx";
 import { TextField, NumberField, DateField, InlineAlert } from "./commons/Fields/Fields.jsx";
 
-const PILL_OPTIONS = [
-  {
-    label: "Low Supply",
-    value: "low-supply",
-    property: "lowStockMedicines",
-    styling: "bg-red-100 text-red-800 border-red-300 hover:bg-red-200",
-  },
-  {
-    label: "Refill Soon",
-    value: "Refill Soon",
-    property: "refillSoonMedicines",
-    styling: "bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200",
-  }
-];
-
 function emptyMedicineForm() {
   return {
     skuCode: "",

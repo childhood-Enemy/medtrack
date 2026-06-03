@@ -8,7 +8,7 @@ import PillButton from "../PillButton/PillButton.jsx";
 import InventoryAlertTable from "../InventoryAlertTable/InventoryAlertTable.jsx";
 
 const HomePage = ({ summary, loading, setView = () => { }, setBulkOrderInvoice = () => { }, bulkOrderInvoice = null }) => {
-    const [activeTab, setActiveTab] = useState("Refill Soon");
+    const [activeTab, setActiveTab] = useState("low-supply");
 
     useEffect(() => {
         // Once you have the data selected in bulkOrderInvoice - redirect to invoice page with the data needed to prefill the invoice form and line items.

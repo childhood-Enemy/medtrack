@@ -50,17 +50,17 @@ export const ROUTES =
 
 export const PILL_OPTIONS = [
     {
-        label: "Critical",
-        value: "critical",
-        property: "refillSoonMedicines",
-        styling: "alert-pill alert-pill-critical"
-    },
-    {
         label: "Low Supply",
         value: "low-supply",
         property: "lowStockMedicines",
-        styling: "alert-pill alert-pill-warning"
-    }
+        styling: "bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200"
+    },
+    {
+        label: "Refill Soon",
+        value: "critical",
+        property: "refillSoonMedicines",
+        styling: "bg-red-100 text-red-800 border-red-300 hover:bg-red-200"
+    },
 ];
 
 export const STATUS = {
