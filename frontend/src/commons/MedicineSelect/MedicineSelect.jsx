@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-
+import filter from "lodash";
 const MedicineSelect = ({ medicines, value, onChange }) => {
     const [search, setSearch] = useState("");
     const [isOpen, setIsOpen] = useState(false);
 
-    let filtered = medicines.filter((medicine) =>
+    let filtered = filter(medicines, (medicine) =>
         medicine.skuName
             .toLowerCase()
             .includes(search.toLowerCase())
@@ -45,7 +45,6 @@ const MedicineSelect = ({ medicines, value, onChange }) => {
                                 setSearch(medicine.skuName);
                                 onChange(medicine.id);
                                 setIsOpen(false);
-                                // Clear the filtered list after selection
                             }}
                         >
                             {medicine.skuName}

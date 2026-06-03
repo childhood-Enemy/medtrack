@@ -1043,8 +1043,8 @@ class SQLiteStore:
                     """
                 ).fetchall()
             ]
-            # low_stock = [row for row in inventory_rows if row["status"] == "LOW_STOCK"]
-            # refill_soon = [row for row in inventory_rows if row["status"] == "REFILL_SOON"]
+            low_stock = [row for row in inventory_rows if row["status"] == "LOW_STOCK"]
+            refill_soon = [row for row in inventory_rows if row["status"] == "REFILL_SOON"]
 
             pending_total = conn.execute(
                 "SELECT COUNT(*) AS count FROM supplier_orders WHERE status IN ('sent', 'awaiting confirmation')"
@@ -1070,28 +1070,28 @@ class SQLiteStore:
             ).fetchall()
 
         alerts: list[dict[str, Any]] = []
-        # for item in low_stock:
-        #     alerts.append(
-        #         {
-        #             "alertKey": f"LOW_STOCK:{item['medicineId']}",
-        #             "alertType": "LOW_STOCK",
-        #             "severity": "critical",
-        #             "entityType": "medicine",
-        #             "entityId": item["medicineId"],
-        #             "message": f"{item['skuName']} is at or below replenishment level.",
-        #         }
-        #     )
-        # for item in refill_soon:
-        #     alerts.append(
-        #         {
-        #             "alertKey": f"REFILL_SOON:{item['medicineId']}",
-        #             "alertType": "REFILL_SOON",
-        #             "severity": "warning",
-        #             "entityType": "medicine",
-        #             "entityId": item["medicineId"],
-        #             "message": f"{item['skuName']} should be refilled soon.",
-        #         }
-        #     )
+        for item in low_stock:
+            alerts.append(
+                {
+                    "alertKey": f"LOW_STOCK:{item['medicineId']}",
+                    "alertType": "LOW_STOCK",
+                    "severity": "critical",
+                    "entityType": "medicine",
+                    "entityId": item["medicineId"],
+                    "message": f"{item['skuName']} is at or below replenishment level.",
+                }
+            )
+        for item in refill_soon:
+            alerts.append(
+                {
+                    "alertKey": f"REFILL_SOON:{item['medicineId']}",
+                    "alertType": "REFILL_SOON",
+                    "severity": "warning",
+                    "entityType": "medicine",
+                    "entityId": item["medicineId"],
+                    "message": f"{item['skuName']} should be refilled soon.",
+                }
+            )
         for order in pending_orders:
             alerts.append(
                 {
@@ -1123,8 +1123,8 @@ class SQLiteStore:
             "ytdSalesValue": money_text(ytd_sales),
             "todayQtySold": int(today_qty or 0),
             "ytdQtySold": int(ytd_qty or 0),
-            # "lowStockMedicines": low_stock,
-            # "refillSoonMedicines": refill_soon,
+            "lowStockMedicines": low_stock,
+            "refillSoonMedicines": refill_soon,
             "pendingSupplierOrders": pending_orders,
             "pendingSupplierOrdersPage": page,
             "pendingSupplierOrdersPageSize": page_size,
