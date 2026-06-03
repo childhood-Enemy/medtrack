@@ -22,3 +22,17 @@ export function money(value) {
 export function normalize(value) {
   return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
+
+export function uid() {
+  return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+}
+
+export function newSalesLine() {
+  return { id: uid(), medicineId: "", qtySold: "1", unitPrice: "", discountAmount: "0" };
+}
+
+// use this format to create as many medicine orders as required
+export function newSupplierLine() {
+  return { id: uid(), medicineId: "", qtyOrdered: "1", committedUnitPrice: "", discountAmount: "0" };
+}
+

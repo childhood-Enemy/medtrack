@@ -1,5 +1,7 @@
 import { map, get, orderBy } from "lodash";
-const InventoryAlertTable = ({ title, icon: Icon, rows, bg }) => {
+//  Adding the bulk order button - should redirect to invoice page with prefilled medicines and quantities to reorder. 
+// Only supplier needs to be selected by the user.
+const InventoryAlertTable = ({ title, icon: Icon, rows, bg, bulkOrderClick = () => { } }) => {
     const headers = [
         {
             label: "Medicine",
@@ -38,6 +40,16 @@ const InventoryAlertTable = ({ title, icon: Icon, rows, bg }) => {
             <div className={`flex items-center gap-2 px-4 py-3 border-stone-200 border-b ${bg}`}>
                 <Icon size={20} />
                 <h2 className="font-bold text-stone-950 text-lg">{title}</h2>
+                <button
+                    variant="outline"
+                    size="sm"
+                    className="ml-auto"
+                    onClick={() => {
+                        bulkOrderClick(sortedRows);
+                    }}
+                >
+                    Order Now
+                </button>
             </div>
             <div className="max-h-[255px] overflow-auto">
                 <table className="w-full min-w-[430px] border-collapse">

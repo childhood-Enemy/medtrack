@@ -1,14 +1,16 @@
 import { useState, useEffect } from "react";
-import filter from "lodash";
+import { filter, find, get } from "lodash";
 const MedicineSelect = ({ medicines, value, onChange }) => {
     const [search, setSearch] = useState("");
     const [isOpen, setIsOpen] = useState(false);
 
-    let filtered = filter(medicines, (medicine) =>
-        medicine.skuName
-            .toLowerCase()
-            .includes(search.toLowerCase())
+    const filtered = medicines.filter(
+        (medicine) =>
+            medicine.skuName
+                .toLowerCase()
+                .includes(search.toLowerCase())
     );
+
     useEffect(() => {
         if (search.length != 0) {
             const bval = search.length > 0
@@ -17,6 +19,12 @@ const MedicineSelect = ({ medicines, value, onChange }) => {
     }, [search]);
 
     useEffect(() => {
+        if (value != null) {
+            let preselectedMedicine = find(medicines,
+                (medicine) => medicine.id === value)
+            console.log(medicines, preselectedMedicine);
+            setSearch(get(preselectedMedicine, "skuName", ""));
+        }
         const close = () => setIsOpen(false);
         document.addEventListener("click", close);
         return () =>

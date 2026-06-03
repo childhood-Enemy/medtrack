@@ -16,24 +16,18 @@ import {
   Pill,
   X,
 } from "lucide-react";
-import { PillButton } from "./Pill/PillButton.jsx";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, apiUrl } from "./api.js";
-import { money, todayInputDate } from "./utils.js";
+import { money, todayInputDate, uid, newSalesLine, newSupplierLine } from "./utils.js";
 import { get, map } from "lodash";
 import InventoryAlertTable from "./InventoryAlertTable/InventoryAlertTable.jsx";
 import MedicineSelect from "./commons/MedicineSelect/MedicineSelect.jsx";
+import InvoicePage from "./InvoicePage/InvoicePage.jsx";
+import { ROUTES } from "../constants.js";
+import fieldFunctions from "./commons/Fields/Fields.jsx";
+import HomePage from "./HomePage/HomePage.jsx";
+import { TextField, NumberField, DateField, InlineAlert } from "./commons/Fields/Fields.jsx";
 
-const STATUS_OPTIONS = [
-  "draft",
-  "sent",
-  "awaiting confirmation",
-  "confirmed",
-  "partially received",
-  "received",
-  "cancelled",
-  "overdue",
-];
 const PILL_OPTIONS = [
   {
     label: "Low Supply",
@@ -48,18 +42,6 @@ const PILL_OPTIONS = [
     styling: "bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200",
   }
 ];
-
-function uid() {
-  return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
-}
-
-function newSalesLine() {
-  return { id: uid(), medicineId: "", qtySold: "1", unitPrice: "", discountAmount: "0" };
-}
-
-function newSupplierLine() {
-  return { id: uid(), medicineId: "", qtyOrdered: "1", committedUnitPrice: "", discountAmount: "0" };
-}
 
 function emptyMedicineForm() {
   return {
@@ -79,10 +61,6 @@ function emptyMedicineForm() {
   };
 }
 
-function emptySupplierForm() {
-  return { supplierName: "", phone: "", contactPerson: "", reliabilityRating: "3" };
-}
-
 export default function App() {
   const [view, setView] = useState("home");
   const [homeSummary, setHomeSummary] = useState(null);
@@ -93,6 +71,7 @@ export default function App() {
   const [supplierOrders, setSupplierOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState("");
+  const [bulkOrderInvoice, setBulkOrderInvoice] = useState(null);
 
   const refreshAll = useCallback(async () => {
     setLoading(true);
@@ -132,10 +111,17 @@ export default function App() {
             <div className="text-stone-600 text-sm">Inventory, sales receipts, and supplier order follow-up</div>
           </div>
           <nav className="flex flex-wrap gap-2">
-            <NavButton active={view === "home"} icon={Home} onClick={() => setView("home")} />
-            <NavButton active={view === "orders"} icon={ClipboardList} label="Orders" onClick={() => setView("orders")} />
-            <NavButton active={view === "invoice"} icon={FileText} label="Invoice" onClick={() => setView("invoice")} />
-            <NavButton active={view === "medicines"} icon={Pill} label="Medicines" onClick={() => setView("medicines")} />
+            {
+              map(ROUTES, (route) => (
+                <NavButton
+                  key={route.key}
+                  active={view === route.key}
+                  icon={route.icon}
+                  label={route.label}
+                  onClick={() => setView(route.key)}
+                />
+              ))
+            }
             <button className="btn" onClick={refreshAll} type="button">
               <RefreshCcw size={18} />
             </button>
@@ -148,13 +134,14 @@ export default function App() {
           <StatusBar summary={homeSummary} loading={loading} error={apiError} />
         </div>
 
-        {view === "home" && <HomePage summary={homeSummary} loading={loading} />}
+        {view === "home" && <HomePage summary={homeSummary} loading={loading} setView={setView} setBulkOrderInvoice={setBulkOrderInvoice} bulkOrderInvoice={bulkOrderInvoice} />}
         {view === "orders" && <OrdersPage medicines={medicines} salesOrders={salesOrders} onChanged={refreshAll} />}
         {view === "invoice" && (
           <InvoicePage
             medicines={medicines}
             suppliers={suppliers}
             supplierOrders={supplierOrders}
+            bulkOrderInvoice={bulkOrderInvoice}
             onChanged={refreshAll}
           />
         )}
@@ -195,88 +182,6 @@ function StatusBar({ summary, loading, error }) {
     </div>
   );
 }
-
-function HomePage({ summary, loading }) {
-  const [activeTab, setActiveTab] = useState("Refill Soon");
-
-  if (loading || !summary) {
-    return <div className="p-4 text-stone-600 text-sm panel">Loading home summary...</div>;
-  }
-
-  let { pendingSupplierOrders, pendingSupplierOrdersTotal, pendingSupplierOrdersPage, pendingSupplierOrdersPageSize } = summary;
-  return (
-    <section className="space-y-4">
-      {/* Pending Supplier Orders - Show a reason as to why these are alerts */}
-      <div className="gap-4 grid lg:grid-cols-1">
-        <PendingSupplierPanel
-          orders={pendingSupplierOrders || []}
-          total={pendingSupplierOrdersTotal || 0}
-          page={pendingSupplierOrdersPage || 1}
-          pageSize={pendingSupplierOrdersPageSize || 10}
-        />
-      </div>
-      {/* Inventory tables for Low Supply and Refill Soon Inventory */}
-      <div className="gap-4 grid lg:grid-cols-1">
-        <PillButton options={PILL_OPTIONS} onChange={setActiveTab} selectedTab={activeTab} />
-        {PILL_OPTIONS.map((option) => {
-          const { value, label, property, styling } = option;
-          return activeTab === value && (
-            <InventoryAlertTable
-              title={`${label} (${get(summary, property, "").length || 0})`}
-              icon={AlertTriangle}
-              rows={get(summary, property, "") || []}
-              bg={styling}
-            />);
-        })}
-      </div>
-    </section>
-  );
-}
-
-function PendingSupplierPanel({ orders, total, page, pageSize }) {
-  return (
-    <div className="overflow-hidden panel">
-      <div className="flex items-center gap-2 px-4 py-3 border-stone-200 border-b">
-        <Truck size={20} />
-        <h2 className="font-bold text-stone-950 text-lg">Supplier Orders To Confirm</h2>
-      </div>
-      <div className="max-h-[255px] overflow-auto">
-        <table className="w-full min-w-[590px] border-collapse">
-          <thead className="table-head">
-            <tr>
-              <th className="px-3 py-2">Supplier</th>
-              <th className="px-3 py-2">Call</th>
-              <th className="px-3 py-2">Deadline</th>
-              <th className="px-3 py-2">Value</th>
-              <th className="px-3 py-2">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orders.map((order) => (
-              <tr className="bg-white" key={order.id}>
-                <td className="table-cell">{order.supplierName}</td>
-                <td className="table-cell"><CallIcon phone={order.followUpPhone || order.supplierPhone} /></td>
-                <td className="table-cell">{order.expectedDeliveryDate}</td>
-                <td className="table-cell">Rs {money(order.totalCommittedValue)}</td>
-                <td className="table-cell">{order.status}</td>
-              </tr>
-            ))}
-            {orders.length === 0 && (
-              <tr>
-                <td className="table-cell text-stone-600" colSpan="5">No supplier orders awaiting confirmation.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-      <div className="px-4 py-2 border-stone-200 border-t text-stone-600 text-xs">
-        Page {page}; showing up to {pageSize} of {total}.
-      </div>
-    </div>
-  );
-}
-
-
 
 function OrdersPage({ medicines, salesOrders, onChanged }) {
   const [form, setForm] = useState({
@@ -407,256 +312,6 @@ function RecentSalesOrders({ orders }) {
           </div>
         ))}
         {orders.length === 0 && <div className="p-4 text-stone-600 text-sm">No sales orders yet.</div>}
-      </div>
-    </div>
-  );
-}
-
-function InvoicePage({ medicines, suppliers, supplierOrders, onChanged }) {
-  const [supplierForm, setSupplierForm] = useState(emptySupplierForm());
-  const [orderForm, setOrderForm] = useState({
-    supplierId: "",
-    orderDate: todayInputDate(),
-    expectedDeliveryDate: todayInputDate(),
-    status: "sent",
-    discountAmount: "0",
-    notes: "",
-  });
-  const [lines, setLines] = useState([newSupplierLine()]);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-
-  const medicineById = useMemo(() => new Map(medicines.map((medicine) => [String(medicine.id), medicine])), [medicines]);
-
-  const saveSupplier = async (event) => {
-    event.preventDefault();
-    setMessage("");
-    setError("");
-    try {
-      await api("/suppliers", { method: "POST", body: JSON.stringify(supplierForm) });
-      setSupplierForm(emptySupplierForm());
-      setMessage("Supplier saved.");
-      await onChanged();
-    } catch (apiError) {
-      setError((apiError.errors || [apiError.message || "Supplier save failed."]).join(" "));
-    }
-  };
-
-  const updateLine = (lineId, patch) => {
-    setLines((current) => current.map((line) => (line.id === lineId ? { ...line, ...patch } : line)));
-  };
-
-  const selectMedicine = (lineId, medicineId) => {
-    const medicine = medicineById.get(String(medicineId));
-    updateLine(lineId, { medicineId, committedUnitPrice: medicine?.costPrice || "" });
-  };
-
-  const saveSupplierOrder = async (event) => {
-    event.preventDefault();
-    setMessage("");
-    setError("");
-    try {
-      const result = await api("/supplier-orders", {
-        method: "POST",
-        body: JSON.stringify({
-          ...orderForm,
-          items: lines.map(({ medicineId, qtyOrdered, committedUnitPrice, discountAmount }) => ({
-            medicineId,
-            qtyOrdered,
-            committedUnitPrice,
-            discountAmount,
-          })),
-        }),
-      });
-      setMessage(`Saved ${result.poNo}. Supplier invoice PDF is ready.`);
-      setLines([newSupplierLine()]);
-      setOrderForm({
-        supplierId: "",
-        orderDate: todayInputDate(),
-        expectedDeliveryDate: todayInputDate(),
-        status: "sent",
-        discountAmount: "0",
-        notes: "",
-      });
-      await onChanged();
-      window.open(apiUrl(result.invoiceUrl), "_blank", "noopener");
-    } catch (apiError) {
-      setError((apiError.errors || [apiError.message || "Supplier order failed."]).join(" "));
-    }
-  };
-
-  return (
-    <section className="space-y-4">
-      <div className="gap-4 grid lg:grid-cols-[360px_1fr]">
-        <form className="p-4 panel" onSubmit={saveSupplier}>
-          <h1 className="mb-1 font-bold text-stone-950 text-xl">Suppliers</h1>
-          <p className="mb-4 text-stone-600 text-sm">Add suppliers with follow-up phone and reliability rating.</p>
-          <div className="gap-3 grid">
-            <TextField label="Supplier Name" value={supplierForm.supplierName} onChange={(value) => setSupplierForm({ ...supplierForm, supplierName: value })} />
-            <TextField label="Phone" value={supplierForm.phone} onChange={(value) => setSupplierForm({ ...supplierForm, phone: value })} />
-            <TextField label="Contact Person" value={supplierForm.contactPerson} onChange={(value) => setSupplierForm({ ...supplierForm, contactPerson: value })} />
-            <NumberField label="Reliability 1-5" value={supplierForm.reliabilityRating} onChange={(value) => setSupplierForm({ ...supplierForm, reliabilityRating: value })} />
-          </div>
-          <button className="mt-4 w-full btn btn-primary" type="submit">
-            <Save size={18} />
-            Save Supplier
-          </button>
-        </form>
-
-        <form className="p-4 panel" onSubmit={saveSupplierOrder}>
-          <h1 className="mb-1 font-bold text-stone-950 text-xl">Supplier Order Invoice</h1>
-          <p className="mb-4 text-stone-600 text-sm">Place supplier orders, track confirmation, deadlines, and receipts.</p>
-          <div className="gap-3 grid md:grid-cols-5">
-            <div>
-              <label className="label">Supplier</label>
-              <select className="field" value={orderForm.supplierId} onChange={(event) => setOrderForm({ ...orderForm, supplierId: event.target.value })}>
-                <option value="">Select supplier</option>
-                {suppliers.map((supplier) => (
-                  <option key={supplier.id} value={supplier.id}>{supplier.supplierName}</option>
-                ))}
-              </select>
-            </div>
-            <DateField label="Order Date" value={orderForm.orderDate} onChange={(value) => setOrderForm({ ...orderForm, orderDate: value })} />
-            <DateField label="Deadline" value={orderForm.expectedDeliveryDate} onChange={(value) => setOrderForm({ ...orderForm, expectedDeliveryDate: value })} />
-            <div>
-              <label className="label">Status</label>
-              <select className="field" value={orderForm.status} onChange={(event) => setOrderForm({ ...orderForm, status: event.target.value })}>
-                {STATUS_OPTIONS.map((status) => <option key={status} value={status}>{status}</option>)}
-              </select>
-            </div>
-            <NumberField label="Order Discount" value={orderForm.discountAmount} onChange={(value) => setOrderForm({ ...orderForm, discountAmount: value })} step="0.01" />
-          </div>
-          <div className="mt-3">
-            <TextField label="Notes" value={orderForm.notes} onChange={(value) => setOrderForm({ ...orderForm, notes: value })} />
-          </div>
-          {/* Invoice Table */}
-          <div className="space-y-3 mt-4">
-            {map(lines, (line, index) => {
-              const { medicineId, qtyOrdered, committedUnitPrice, discountAmount } = line;
-              const linetotal = (Number(qtyOrdered || 0) * Number(committedUnitPrice || 0)) - Number(discountAmount || 0);
-              return (
-                <div className="bg-stone-50 p-3 border border-stone-300 rounded-md" key={line.id}>
-                  <div className="flex justify-between items-center mb-2">
-                    <div className="font-semibold">Supplier Item {index + 1}</div>
-                    <button className="px-2 h-8 btn" disabled={lines.length === 1} onClick={() => setLines(lines.filter((item) => item.id !== line.id))} type="button">
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                  <div className="gap-3 grid md:grid-cols-[2fr_75px_75px_75px_75px]">
-                    <MedicineSelect medicines={medicines} value={line.medicineId} onChange={(value) => selectMedicine(line.id, value)} />
-                    <NumberField label="Qty" value={line.qtyOrdered} onChange={(value) => updateLine(line.id, { qtyOrdered: value })} />
-                    <NumberField label="Committed Price" value={line.committedUnitPrice} readOnly/>
-                    <NumberField label="Discount" value={line.discountAmount} onChange={(value) => updateLine(line.id, { discountAmount: value })} step="0.01" />
-                    <NumberField label="Line Total" value={linetotal} readOnly/>
-                  </div>
-                </div>
-              )
-            }
-            )}
-          </div>
-
-          <div className="flex md:flex-row flex-col md:justify-between gap-3 mt-4">
-            <button className="btn" onClick={() => setLines([...lines, newSupplierLine()])} type="button">
-              <Plus size={18} />
-              Add Item
-            </button>
-            <button className="btn btn-primary" type="submit">
-              <Save size={18} />
-              Save Supplier Order
-            </button>
-          </div>
-        </form>
-      </div>
-
-      {message && <InlineAlert tone="ok" text={message} />}
-      {error && <InlineAlert tone="error" text={error} />}
-      <SupplierOrderTable orders={supplierOrders} onChanged={onChanged} />
-    </section>
-  );
-}
-
-function SupplierOrderTable({ orders, onChanged }) {
-  const [error, setError] = useState("");
-
-  const updateStatus = async (orderId, status) => {
-    setError("");
-    try {
-      await api(`/supplier-orders/${orderId}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
-      await onChanged();
-    } catch (apiError) {
-      setError((apiError.errors || [apiError.message || "Status update failed."]).join(" "));
-    }
-  };
-
-  const receiveAll = async (orderId) => {
-    setError("");
-    try {
-      await api(`/supplier-orders/${orderId}/receive`, { method: "POST", body: JSON.stringify({}) });
-      await onChanged();
-    } catch (apiError) {
-      setError((apiError.errors || [apiError.message || "Receive failed."]).join(" "));
-    }
-  };
-
-  return (
-    <div className="overflow-hidden panel">
-      <div className="px-4 py-3 border-stone-200 border-b">
-        <h2 className="font-bold text-stone-950 text-lg">Supplier Order Status</h2>
-      </div>
-      {error && <InlineAlert tone="error" text={error} />}
-      <div className="max-h-[255px] overflow-auto">
-        <table className="w-full min-w-[1020px] border-collapse">
-          <thead className="table-head">
-            <tr>
-              <th className="px-3 py-2">Supplier</th>
-              <th className="px-3 py-2">Call</th>
-              <th className="px-3 py-2">Deadline</th>
-              <th className="px-3 py-2">Qty</th>
-              <th className="px-3 py-2">Value</th>
-              <th className="px-3 py-2">Reliability</th>
-              <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orders.map((order) => {
-              const qtyOrdered = order.items.reduce((total, item) => total + Number(item.qtyOrdered || 0), 0);
-              const qtyReceived = order.items.reduce((total, item) => total + Number(item.qtyReceived || 0), 0);
-              return (
-                <tr className="bg-white" key={order.id}>
-                  <td className="table-cell">{order.supplierName}</td>
-                  <td className="table-cell"><CallIcon phone={order.followUpPhone || order.supplierPhone} /></td>
-                  <td className="table-cell">{order.expectedDeliveryDate}</td>
-                  <td className="table-cell">{qtyReceived}/{qtyOrdered}</td>
-                  <td className="table-cell">Rs {money(order.totalCommittedValue)}</td>
-                  <td className="table-cell">{order.reliabilitySnapshot}/5</td>
-                  <td className="table-cell">
-                    <select className="min-w-44 h-9 field" value={order.status} onChange={(event) => updateStatus(order.id, event.target.value)}>
-                      {STATUS_OPTIONS.map((status) => <option key={status} value={status}>{status}</option>)}
-                    </select>
-                  </td>
-                  <td className="table-cell">
-                    <div className="flex gap-2">
-                      <button className="h-9 btn" onClick={() => receiveAll(order.id)} type="button" disabled={order.status === "received" || order.status === "cancelled"}>
-                        <Package size={16} />
-                        Receive
-                      </button>
-                      <button className="h-9 btn" onClick={() => window.open(apiUrl(order.invoiceUrl), "_blank", "noopener")} type="button">
-                        <Printer size={16} />
-                        PDF
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-            {orders.length === 0 && (
-              <tr>
-                <td className="table-cell text-stone-600" colSpan="8">No supplier orders yet.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
       </div>
     </div>
   );
@@ -854,40 +509,6 @@ function CallIcon({ phone }) {
   );
 }
 
-function TextField({ label, value, onChange }) {
-  return (
-    <div>
-      <label className="label">{label}</label>
-      <input className="field" value={value} onChange={(event) => onChange(event.target.value)} />
-    </div>
-  );
-}
-
-function DateField({ label, value, onChange }) {
-  return (
-    <div>
-      <label className="label">{label}</label>
-      <input className="field" type="date" value={value} onChange={(event) => onChange(event.target.value)} />
-    </div>
-  );
-}
-
-function NumberField({ label, value, onChange, step = "1" }) {
-  return (
-    <div>
-      <label className="label">{label}</label>
-      <input
-        className="field"
-        inputMode="decimal"
-        onChange={(event) => onChange(event.target.value)}
-        step={step}
-        type="number"
-        value={value}
-      />
-    </div>
-  );
-}
-
 function SummaryTile({ label, value }) {
   return (
     <div className="p-4 panel">
@@ -907,21 +528,6 @@ function Metric({ label, value, tone = "default" }) {
   return (
     <div className={`rounded-md border px-3 py-2 ${toneClass}`}>
       <span className="font-semibold">{label}:</span> {value}
-    </div>
-  );
-}
-
-function InlineAlert({ tone, text }) {
-  const classes =
-    tone === "error"
-      ? "border-red-300 bg-red-50 text-red-800"
-      : tone === "warn"
-        ? "border-amber-300 bg-amber-50 text-amber-900"
-        : "border-emerald-300 bg-emerald-50 text-emerald-900";
-  return (
-    <div className={`mt-3 flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${classes}`}>
-      {tone === "error" || tone === "warn" ? <AlertTriangle size={18} /> : <CheckCircle2 size={18} />}
-      {text}
     </div>
   );
 }

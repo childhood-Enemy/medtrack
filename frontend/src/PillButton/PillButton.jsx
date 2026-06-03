@@ -1,5 +1,5 @@
 import { map } from "lodash";
-export function PillButton(properties) {
+const PillButton = (properties) => {
     const { selectedTab, options, onChange } = properties;
 
     return (
@@ -18,5 +18,7 @@ export function PillButton(properties) {
         </div>
     );
 }
+
+export default PillButton;
 
 

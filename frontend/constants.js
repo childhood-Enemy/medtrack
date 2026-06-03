@@ -1,3 +1,9 @@
+import {
+    FileText,
+    ClipboardList,
+    Home,
+    Pill,
+} from "lucide-react";
 
 export const INVENTORY_STATUS_CODES = {
     SENT: 'sent',
@@ -7,27 +13,53 @@ export const INVENTORY_STATUS_CODES = {
     RECEIVED: 'received',
 };
 
-export const ROUTES = {
-    HOME: '/',
-    LOGIN: '/login',
-    DASHBOARD: '/dashboard',
-    INVENTORY: '/inventory',
-    ORDERS: '/orders',
-    SETTINGS: '/settings',
-};
+export const STATUS_OPTIONS = [
+    "draft",
+    "sent",
+    "awaiting confirmation",
+    "confirmed",
+    "partially received",
+    "received",
+    "cancelled",
+    "overdue",
+];
+
+export const ROUTES =
+    [
+        {
+            label: "Home",
+            key: "home",
+            icon: Home
+        },
+        {
+            label: "Orders",
+            key: "orders",
+            icon: ClipboardList
+        },
+        {
+            label: "Invoice",
+            key: "invoice",
+            icon: FileText
+        },
+        {
+            label: "Medicines",
+            key: "medicines",
+            icon: Pill
+        }
+    ];
 
 export const PILL_OPTIONS = [
     {
         label: "Critical",
         value: "critical",
         property: "refillSoonMedicines",
-        styling:"alert-pill alert-pill-critical"
+        styling: "alert-pill alert-pill-critical"
     },
     {
         label: "Low Supply",
         value: "low-supply",
         property: "lowStockMedicines",
-        styling:"alert-pill alert-pill-warning"
+        styling: "alert-pill alert-pill-warning"
     }
 ];
 
