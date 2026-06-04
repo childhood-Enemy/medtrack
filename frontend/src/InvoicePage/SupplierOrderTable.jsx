@@ -4,6 +4,7 @@ import { money, uid } from "../utils.js";
 import { api, apiUrl } from "../api.js";
 import { STATUS_OPTIONS } from "../../constants.js";
 import { useState } from "react";
+// import { map } from lodash;
 
 const SupplierOrderTable = ({ orders, onChanged }) => {
   const [error, setError] = useState("");
@@ -18,7 +19,7 @@ const SupplierOrderTable = ({ orders, onChanged }) => {
     }
   };
 
-  const receiveAll = async (orderId) => {
+  const receiveOrder = async (orderId) => {
     setError("");
     try {
       await api(`/supplier-orders/${orderId}/receive`, { method: "POST", body: JSON.stringify({}) });
@@ -27,6 +28,72 @@ const SupplierOrderTable = ({ orders, onChanged }) => {
       setError((apiError.errors || [apiError.message || "Receive failed."]).join(" "));
     }
   };
+
+  /* New function to be used only for receiving partial orders
+  const receivePartially = async (orderId) => {
+    setError("");
+
+    try {
+      await api(
+        `/supplier-orders/${orderId}/receive`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            items: [
+              {
+                itemId,
+                qtyReceived
+              }
+            ]
+          })
+        }
+      );
+
+      await onChanged();
+    } catch (apiError) {
+      setError(
+        (apiError.errors ||
+          [apiError.message || "Receive failed."])
+          .join(" ")
+      );
+    }
+  };
+  */
+
+  // const SUPPLIER_ORDER_TBL_HEADERS = [
+  //   {
+  //     label: "Supplier",
+  //     id: "supplier"
+  //   },
+  //   {
+  //     label: "Call",
+  //     id: "call"
+  //   },
+  //   {
+  //     label: "Deadline",
+  //     id: "deadline"
+  //   },
+  //   {
+  //     label: "Qty",
+  //     id: "qty"
+  //   },
+  //   {
+  //     label: "Value",
+  //     id: "value"
+  //   },
+  //   {
+  //     label: "Reliability",
+  //     id: "reliability"
+  //   },
+  //   {
+  //     label: "Status",
+  //     id: "status"
+  //   },
+  //   {
+  //     label: "Actions",
+  //     id: "actions"
+  //   },
+  // ];
 
   return (
     <div className="overflow-hidden panel">
@@ -38,6 +105,14 @@ const SupplierOrderTable = ({ orders, onChanged }) => {
         <table className="w-full min-w-[1020px] border-collapse">
           <thead className="table-head">
             <tr>
+              {/* {
+                map(SUPPLIER_ORDER_TBL_HEADERS, (head) => {
+                  const { label, id } = head;
+                  return (
+                    <th className="px-3 py-2" key={id}>{label}</th>
+                  );
+                })
+              } */}
               <th className="px-3 py-2">Supplier</th>
               <th className="px-3 py-2">Call</th>
               <th className="px-3 py-2">Deadline</th>
@@ -52,8 +127,18 @@ const SupplierOrderTable = ({ orders, onChanged }) => {
             {orders.map((order) => {
               const qtyOrdered = order.items.reduce((total, item) => total + Number(item.qtyOrdered || 0), 0);
               const qtyReceived = order.items.reduce((total, item) => total + Number(item.qtyReceived || 0), 0);
+              const received = order.status === "received";
+              const cancelled = order.status === "cancelled";
+              const readOnly = received || cancelled;
+
+              const rowClassName =
+                received
+                  ? "bg-green-50"
+                  : cancelled
+                    ? "bg-red-50"
+                    : "bg-amber-50";
               return (
-                <tr className="bg-white" key={order.id}>
+                <tr className={rowClassName} key={order.id} readOnly>
                   <td className="table-cell">{order.supplierName}</td>
                   <td className="table-cell"><CallIcon phone={order.followUpPhone || order.supplierPhone} /></td>
                   <td className="table-cell">{order.expectedDeliveryDate}</td>
@@ -61,13 +146,15 @@ const SupplierOrderTable = ({ orders, onChanged }) => {
                   <td className="table-cell">Rs {money(order.totalCommittedValue)}</td>
                   <td className="table-cell">{order.reliabilitySnapshot}/5</td>
                   <td className="table-cell">
-                    <select className="min-w-44 h-9 field" value={order.status} onChange={(event) => updateStatus(order.id, event.target.value)}>
-                      {STATUS_OPTIONS.map((status) => <option key={status} value={status}>{status}</option>)}
+                    <select className="min-w-44 h-9 field" value={order.status} onChange={(event) => updateStatus(order.id, event.target.value)} disabled={readOnly}>
+                      {STATUS_OPTIONS.map((status) => {
+                        return !["received", "partially received"].includes(status) && (<option key={status} value={status}>{status}</option>)
+                      })}
                     </select>
                   </td>
                   <td className="table-cell">
                     <div className="flex gap-2">
-                      <button className="h-9 btn" onClick={() => receiveAll(order.id)} type="button" disabled={order.status === "received" || order.status === "cancelled"}>
+                      <button className="h-9 btn" onClick={() => receiveOrder(order.id)} type="button" disabled={order.status === "received" || order.status === "cancelled"}>
                         <Package size={16} />
                         Receive
                       </button>

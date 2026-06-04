@@ -413,16 +413,17 @@ function MedicinesPage({ medicines, inventory, onChanged }) {
       <div className="overflow-hidden panel">
         <div className="px-4 py-3 border-stone-200 border-b">
           <h2 className="font-bold text-stone-950 text-lg">Medicine Stock</h2>
+          {/* Add filter for order now /  */}
         </div>
         <div className="max-h-[255px] overflow-auto">
-          <table className="w-100 min-w-[880px] border-collapse">
+          <table className="w-80 min-w-[880px] border-collapse">
             <thead className="table-head">
               <tr>
                 <th className="px-3 py-2">Medicine</th>
                 <th className="px-3 py-2">Brand</th>
                 <th className="px-3 py-2">Units</th>
                 <th className="px-3 py-2">Level</th>
-                <th className="px-3 py-2">Status</th>
+                {/* <th className="px-3 py-2">Status</th> */}
                 <th className="px-3 py-2">Price</th>
                 <th className="px-3 py-2">Actions</th>
               </tr>
@@ -430,13 +431,14 @@ function MedicinesPage({ medicines, inventory, onChanged }) {
             <tbody>
               {medicines.map((medicine) => {
                 const stock = inventory.find((row) => row.medicineId === medicine.id);
+                const statusColor = stock?.status === "REFILL_SOON" ? "bg-amber-50" : stock?.status === "LOW_STOCK" ? "bg-red-50" : "bg-green-50";
                 return (
-                  <tr className="bg-white" key={medicine.id}>
-                    <td className="table-cell">{medicine.medicineName}</td>
+                  <tr className={statusColor} key={medicine.id}>
+                    <td className="table-cell">{medicine.skuName}</td>
                     <td className="table-cell">{medicine.brand}</td>
                     <td className="table-cell">{stock?.currentUnits ?? medicine.currentUnits ?? 0}</td>
                     <td className="table-cell">{stock?.replenishmentLevel ?? medicine.replenishmentLevel ?? 0}</td>
-                    <td className="table-cell">{stock?.status || "OK"}</td>
+                    {/* <td className="table-cell">{stock?.status || "OK"}</td> */}
                     <td className="table-cell">Rs {money(medicine.sellingPrice)}</td>
                     <td className="table-cell">
                       <div className="flex gap-2">
