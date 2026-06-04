@@ -163,7 +163,7 @@ const InvoicePage = ({ medicines, suppliers, supplierOrders, onChanged, bulkOrde
                                     <div className="gap-3 grid md:grid-cols-[2fr_75px_75px_75px_75px]">
                                         <MedicineSelect medicines={medicines} value={line.medicineId} onChange={(value) => selectMedicine(line.id, value)} />
                                         <NumberField label="Qty" value={line.qtyOrdered} onChange={(value) => updateLine(line.id, { qtyOrdered: value })} />
-                                        <TextField label="Unit Price" value={line.committedUnitPrice} readOnly />
+                                        <NumberField label="Unit Price" value={line.committedUnitPrice} onChange={(value) => updateLine(line.id, { committedUnitPrice: value })} />
                                         <NumberField label="Discount" value={line.discountAmount} onChange={(value) => updateLine(line.id, { discountAmount: value })} step="0.01" />
                                         <TextField label="Line Total" value={linetotal} readOnly />
                                     </div>
