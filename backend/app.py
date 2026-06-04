@@ -4,6 +4,12 @@ from flask import Flask, Response, jsonify, request
 from werkzeug.exceptions import HTTPException
 
 from sqlite_store import SQLiteStore, ValidationError
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Table,
+    TableStyle,
+    Paragraph
+)
 
 
 app = Flask(__name__)
@@ -134,7 +140,8 @@ def sales_orders_create():
 
 @app.get("/api/sales-orders/<int:sales_order_id>/receipt.pdf")
 def sales_order_receipt(sales_order_id: int):
-    filename, pdf = store.sales_receipt_pdf(sales_order_id)
+    # filename, pdf = store.sales_receipt_pdf(sales_order_id)
+    filename, pdf = store.sales_receipt_pdf_v2(sales_order_id)
     return Response(
         pdf,
         mimetype="application/pdf",

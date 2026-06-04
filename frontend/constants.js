@@ -53,13 +53,15 @@ export const PILL_OPTIONS = [
         label: "Low Supply",
         value: "low-supply",
         property: "lowStockMedicines",
-        styling: "bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200"
+        styling: "bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200",
+        bg:"bg-amber-100"
     },
     {
         label: "Refill Soon",
         value: "critical",
         property: "refillSoonMedicines",
-        styling: "bg-red-100 text-red-800 border-red-300 hover:bg-red-200"
+        styling: "bg-red-100 text-red-800 border-red-300 hover:bg-red-200",
+        bg:"bg-red-100"
     },
 ];
 

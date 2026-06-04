@@ -43,7 +43,7 @@ const InventoryAlertTable = ({ title, icon: Icon, rows, bg, bulkOrderClick = () 
                 <button
                     variant="outline"
                     size="sm"
-                    className="ml-auto"
+                    className="bulk-order-btn ml-auto"
                     onClick={() => {
                         bulkOrderClick(sortedRows);
                     }}

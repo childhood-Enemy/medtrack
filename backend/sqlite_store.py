@@ -8,6 +8,20 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from textwrap import wrap
 from typing import Any
+from io import BytesIO
+
+from reportlab.lib import colors
+from reportlab.lib.units import mm
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Paragraph,
+    Spacer,
+    Table,
+    TableStyle,
+)
+
+from reportlab.lib.styles import getSampleStyleSheet
+
 
 
 DEFAULT_DATA_DIR = Path(__file__).resolve().parents[1] / "data"
@@ -1149,6 +1163,49 @@ class SQLiteStore:
             )
         lines.extend(["", f"Subtotal: Rs {order['subtotal']}", f"Order Discount: Rs {order['discountAmount']}", f"Grand Total: Rs {order['totalAmount']}"])
         return f"{order['orderNo']}_receipt.pdf", lines
+    
+    # This version is more suited for stronger receipt creation - better control over the output et.
+    def _receipt_data_v2( self, conn: sqlite3.Connection, sales_order_id: int) -> tuple[str, dict]:
+        order = self._sale_order_response(
+            conn,
+            sales_order_id,
+        )
+
+        receipt_data = {
+            "header": {
+                "pharmacyName": "MEDTRACK PHARMACY",
+                "receiptNo": order["orderNo"],
+                "receiptDate": order["orderDate"],
+            },
+
+            "customer": {
+                "customerName": order.get("customerName","").strip() or "Walk-in",
+                "customerPhone": order.get("customerPhone","").strip() or "N/A",
+            },
+
+            "items": [
+                {
+                    "skuCode": item["skuCode"],
+                    "medicineName": item["skuName"],
+                    "qty": item["qtySold"],
+                    "unitPrice": item["unitPrice"],
+                    "discount": item["discountAmount"],
+                    "lineTotal": item["lineTotal"],
+                }
+                for item in order["items"]
+            ],
+
+            "summary": {
+                "subtotal": order["subtotal"],
+                "orderDiscount": order["discountAmount"],
+                "grandTotal": order["totalAmount"],
+            },
+        }
+
+        return (
+            f"{order['orderNo']}_receipt.pdf",
+            receipt_data,
+        )
 
     def _supplier_invoice_lines(self, conn: sqlite3.Connection, supplier_order_id: int) -> tuple[str, list[str]]:
         order = self._supplier_order_response(conn, supplier_order_id)
@@ -1182,6 +1239,48 @@ class SQLiteStore:
                 (sales_order_id, str(path)),
             )
         return filename, pdf
+    
+    # New Receipt generation function
+    def sales_receipt_pdf_v2(self,sales_order_id: int) -> tuple[str, bytes]:
+        with self.connect() as conn:
+            filename, receipt_data = self._receipt_data_v2(
+                conn,
+                sales_order_id,
+            )
+
+            pdf = build_receipt_pdf_v2(
+                receipt_data
+            )
+
+            path = self.documents_dir / filename
+
+            path.write_bytes(pdf)
+
+            conn.execute(
+                """
+                INSERT INTO documents (
+                    document_type,
+                    source_type,
+                    source_id,
+                    file_path
+                )
+                VALUES (
+                    'receipt_pdf',
+                    'sales_order',
+                    ?,
+                    ?
+                )
+                """,
+                (
+                    sales_order_id,
+                    str(path),
+                ),
+            )
+
+        return (
+            filename,
+            pdf,
+        )
 
     def supplier_invoice_pdf(self, supplier_order_id: int) -> tuple[str, bytes]:
         with self.connect() as conn:
@@ -1239,3 +1338,173 @@ def build_pdf(lines: list[str]) -> bytes:
         output.extend(f"{offset:010d} 00000 n \n".encode("ascii"))
     output.extend(f"trailer << /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_at}\n%%EOF\n".encode("ascii"))
     return bytes(output)
+
+# The new function for handling receipt printing
+def build_receipt_pdf_v2(receipt_data: dict) -> bytes:
+    buffer = BytesIO()
+
+    document = SimpleDocTemplate(
+        buffer,
+        leftMargin=12 * mm,
+        rightMargin=12 * mm,
+        topMargin=12 * mm,
+        bottomMargin=12 * mm,
+    )
+
+    styles = getSampleStyleSheet()
+
+    elements = []
+
+    # ==================================================
+    # HEADER
+    # ==================================================
+
+    header = receipt_data["header"]
+
+    elements.append(
+        Paragraph(
+            "<b>MEDTRACK PHARMACY</b>",
+            styles["Title"],
+        )
+    )
+
+    elements.append(
+        Paragraph(
+            f"Receipt #: {header['receiptNo']}",
+            styles["Normal"],
+        )
+    )
+
+    elements.append(
+        Paragraph(
+            f"Date: {header['receiptDate']}",
+            styles["Normal"],
+        )
+    )
+
+    elements.append(Spacer(1, 10))
+
+    # ==================================================
+    # CUSTOMER
+    # ==================================================
+    elements.append(
+        Paragraph(
+            "<b>Customer Details</b>",
+            styles["Heading3"],
+        )
+    )
+
+    elements.append(
+        Spacer(1, 4)
+    )
+    customer = receipt_data["customer"]
+
+    customer_table = Table(
+        [
+            ["Customer", customer["customerName"]],
+            ["Phone", customer["customerPhone"]],
+        ],
+        colWidths=[150, 300],
+    )
+
+    customer_table.setStyle(
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 1, colors.black),
+                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+            ]
+        )
+    )
+
+    elements.append(customer_table)
+
+    elements.append(Spacer(1, 12))
+
+    # ==================================================
+    # ITEMS
+    # ==================================================
+
+    item_rows = [
+        [
+            "Medicine",
+            "Qty",
+            "Unit Price",
+            "Discount",
+            "Amount",
+        ]
+    ]
+
+    for item in receipt_data["items"]:
+
+        item_rows.append(
+            [
+                str(item["medicineName"]),
+                str(item["qty"]),
+                f"Rs {str(item["unitPrice"])}",
+                f"Rs {str(item["discount"])}",
+                f"Rs {str(item["lineTotal"])}",
+            ]
+        )
+
+    items_table = Table(
+        item_rows,
+        colWidths=[
+            320, #Medicine
+            40, #Quantity
+            70, #Unit Price
+            60, #Discount
+            70, #Amount
+        ],
+    )
+
+    items_table.setStyle(
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 1, colors.black),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold")
+                # ("ALIGN", (2, 1), (-1, -1), "RIGHT"),
+            ]
+        )
+    )
+
+    elements.append(items_table)
+
+    elements.append(Spacer(1, 12))
+
+    # ==================================================
+    # SUMMARY
+    # ==================================================
+
+    summary = receipt_data["summary"]
+
+    summary_rows = [
+        ["Subtotal", f"Rs {summary['subtotal']}"],
+        ["Order Discount", f"Rs {summary['orderDiscount']}"],
+        ["Grand Total", f"Rs {summary['grandTotal']}"],
+    ]
+
+    summary_table = Table(
+        summary_rows,
+        colWidths=[150, 300],
+    )
+
+    summary_table.setStyle(
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 1, colors.black),
+                ("FONTNAME", (-1, -1), (-1, -1), "Helvetica-Bold"),
+                ("FONTNAME", (0, -1), (0, -1), "Helvetica-Bold"),
+            ]
+        )
+    )
+
+    elements.append(summary_table)
+
+    document.build(elements)
+
+    pdf = buffer.getvalue()
+
+    buffer.close()
+
+    return pdf

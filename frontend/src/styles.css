@@ -23,6 +23,10 @@ textarea {
   font: inherit;
 }
 
+.bulk-order-btn {
+  @apply inline-flex items-center rounded-full border border-green-400 bg-green-50 px-5 py-2 text-sm font-semibold text-green-700 transition-colors hover:bg-green-100 hover:border-green-500 cursor-pointer
+}
+
 @layer components {
   .field {
     @apply w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-950 outline-none transition focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/15;

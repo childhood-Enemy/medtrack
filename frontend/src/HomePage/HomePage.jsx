@@ -25,7 +25,6 @@ const HomePage = ({ summary, loading, setView = () => { }, setBulkOrderInvoice =
                 id: crypto.randomUUID(),
                 medicineId: medicineId,
                 qtyOrdered: unitsToReorder,
-                // committedUnitPrice: get(medicine, "costPrice", ""),
                 discountAmount: "0"
             })
         });
