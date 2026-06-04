@@ -172,7 +172,8 @@ def supplier_orders_receive(supplier_order_id: int):
 
 @app.get("/api/supplier-orders/<int:supplier_order_id>/invoice.pdf")
 def supplier_order_invoice(supplier_order_id: int):
-    filename, pdf = store.supplier_invoice_pdf(supplier_order_id)
+    # filename, pdf = store.supplier_invoice_pdf(supplier_order_id)
+    filename, pdf = store.supplier_invoice_pdf_v2(supplier_order_id)
     return Response(
         pdf,
         mimetype="application/pdf",

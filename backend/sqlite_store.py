@@ -1227,6 +1227,72 @@ class SQLiteStore:
             )
         lines.extend(["", f"Order Discount: Rs {order['discountAmount']}", f"Committed Value: Rs {order['totalCommittedValue']}", f"Notes: {order['notes'] or '-'}"])
         return f"{order['poNo']}_supplier_invoice.pdf", lines
+    
+    def _supplier_invoice_data_v2(self, conn: sqlite3.Connection, supplier_order_id: int) -> tuple[str, dict]:
+        order = self._supplier_order_response(
+            conn,
+            supplier_order_id,
+        )
+
+        subtotal = float(order["totalCommittedValue"] or 0)
+        discount = float(order["discountAmount"] or 0)
+
+        taxable_value = subtotal - discount
+
+        cgst = round(taxable_value * 0.06, 2)
+        sgst = round(taxable_value * 0.06, 2)
+
+        grand_total = round(
+            taxable_value + cgst + sgst,
+            2,
+        )
+
+        data = {
+            "header": {
+                "invoiceNo": order["poNo"],
+                "invoiceDate": order["orderDate"],
+                "deadline": order["expectedDeliveryDate"],
+                "status": order["status"],
+            },
+
+            "supplier": {
+                "name": order["supplierName"],
+                "phone": (
+                    order["followUpPhone"]
+                    or order["supplierPhone"]
+                    or "-"
+                ),
+                "reliability": order["reliabilitySnapshot"],
+            },
+
+            "items": [
+                {
+                    "medicineName": item["medicineName"],
+                    "skuName":item["skuName"],
+                    "qtyOrdered": item["qtyOrdered"],
+                    "unitPrice": item["committedUnitPrice"],
+                    "discount": item["discountAmount"],
+                    "lineTotal": item["lineTotal"],
+                }
+                for item in order["items"]
+            ],
+
+            "summary": {
+                "subtotal": subtotal,
+                "discount": discount,
+                "taxableValue": taxable_value,
+                "cgst": cgst,
+                "sgst": sgst,
+                "grandTotal": grand_total,
+            },
+
+            "notes": order["notes"] or "-",
+        }
+
+        return (
+            f"{order['poNo']}_supplier_invoice.pdf",
+            data,
+        )
 
     def sales_receipt_pdf(self, sales_order_id: int) -> tuple[str, bytes]:
         with self.connect() as conn:
@@ -1243,13 +1309,13 @@ class SQLiteStore:
     # New Receipt generation function
     def sales_receipt_pdf_v2(self,sales_order_id: int) -> tuple[str, bytes]:
         with self.connect() as conn:
-            filename, receipt_data = self._receipt_data_v2(
+            filename, invoice_data = self._receipt_data_v2(
                 conn,
                 sales_order_id,
             )
 
             pdf = build_receipt_pdf_v2(
-                receipt_data
+                invoice_data
             )
 
             path = self.documents_dir / filename
@@ -1292,6 +1358,47 @@ class SQLiteStore:
                 "INSERT INTO documents (document_type, source_type, source_id, file_path) VALUES ('supplier_invoice_pdf', 'supplier_order', ?, ?)",
                 (supplier_order_id, str(path)),
             )
+        return filename, pdf
+    
+    def supplier_invoice_pdf_v2(self,supplier_order_id: int) -> tuple[str, bytes]:
+        with self.connect() as conn:
+
+            filename, data = (
+                self._supplier_invoice_data_v2(
+                    conn,
+                    supplier_order_id,
+                )
+            )
+
+            pdf = build_supplier_invoice_pdf_v2(
+                data
+            )
+
+            path = self.documents_dir / filename
+
+            path.write_bytes(pdf)
+
+            conn.execute(
+                """
+                INSERT INTO documents (
+                    document_type,
+                    source_type,
+                    source_id,
+                    file_path
+                )
+                VALUES (
+                    'supplier_invoice_pdf',
+                    'supplier_order',
+                    ?,
+                    ?
+                )
+                """,
+                (
+                    supplier_order_id,
+                    str(path),
+                ),
+            )
+
         return filename, pdf
 
 
@@ -1500,6 +1607,282 @@ def build_receipt_pdf_v2(receipt_data: dict) -> bytes:
     )
 
     elements.append(summary_table)
+
+    document.build(elements)
+
+    pdf = buffer.getvalue()
+
+    buffer.close()
+
+    return pdf
+
+# New Function for Invoice Mgmt.
+def build_supplier_invoice_pdf_v2(data: dict) -> bytes:
+    buffer = BytesIO()
+
+    document = SimpleDocTemplate(
+        buffer,
+        leftMargin=12 * mm,
+        rightMargin=12 * mm,
+        topMargin=12 * mm,
+        bottomMargin=12 * mm,
+    )
+
+    styles = getSampleStyleSheet()
+
+    elements = []
+
+    # =====================================================
+    # HEADER
+    # =====================================================
+
+    header = data["header"]
+
+    elements.append(
+        Paragraph(
+            "<b>MEDTRACK PHARMACY</b>",
+            styles["Title"],
+        )
+    )
+
+    elements.append(
+        Paragraph(
+            "<b>Purchase Order / Supplier Invoice</b>",
+            styles["Heading2"],
+        )
+    )
+
+    elements.append(Spacer(1, 10))
+
+    invoice_table = Table(
+        [
+            ["Invoice No", header["invoiceNo"]],
+            ["Date", header["invoiceDate"]],
+            ["Deadline", header["deadline"]],
+            ["Status", header["status"]],
+        ],
+        colWidths=[120, 320],
+    )
+
+    invoice_table.setStyle(
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 1, colors.black),
+                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+            ]
+        )
+    )
+
+    elements.append(invoice_table)
+
+    elements.append(Spacer(1, 12))
+
+    # =====================================================
+    # SUPPLIER DETAILS
+    # =====================================================
+
+    supplier = data["supplier"]
+
+    elements.append(
+        Paragraph(
+            "<b>Supplier Details</b>",
+            styles["Heading3"],
+        )
+    )
+
+    supplier_table = Table(
+        [
+            ["Supplier", supplier["name"]],
+            ["Phone", supplier["phone"]],
+            # ["Reliability", f"{supplier['reliability']}/5"],
+        ],
+        colWidths=[120, 320],
+    )
+
+    supplier_table.setStyle(
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 1, colors.black),
+                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+            ]
+        )
+    )
+
+    elements.append(supplier_table)
+
+    elements.append(Spacer(1, 12))
+
+    # =====================================================
+    # ITEMS
+    # =====================================================
+
+    item_rows = [
+        [
+            "Medicine",
+            "Qty",
+            "Rate",
+            "Disc",
+            "Amount",
+        ]
+    ]
+
+    for item in data["items"]:
+
+        discount = item["discount"]
+
+        if float(discount or 0) == 0:
+            discount = "-"
+
+        item_rows.append(
+            [
+                item["skuName"],
+                str(item["qtyOrdered"]),
+                f"Rs {float(item['unitPrice']):,.2f}",
+                str(discount),
+                f"Rs {float(item['lineTotal']):,.2f}",
+            ]
+        )
+
+    items_table = Table(
+        item_rows,
+        colWidths=[
+            240,
+            60,
+            80,
+            80,
+            100,
+        ],
+    )
+
+    items_table.setStyle(
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 1, colors.black),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
+            ]
+        )
+    )
+
+    elements.append(items_table)
+
+    elements.append(Spacer(1, 15))
+
+    # =====================================================
+    # BILL SUMMARY
+    # =====================================================
+
+    summary = data["summary"]
+
+    committed_value = float(
+        summary["subtotal"]
+    )
+
+    discount = float(
+        summary.get("discount", 0)
+    )
+
+    taxable_value = float(
+        summary.get("taxableValue", 0)
+    )
+
+    cgst = float(
+        summary.get("cgst", 0)
+    )
+
+    sgst = float(
+        summary.get("sgst", 0)
+    )
+
+    grand_total = float(
+        summary.get("grandTotal", 0)
+    )
+
+    summary_rows = [
+        [
+            "SUB TOTAL",
+            f"Rs {committed_value:,.2f}",
+        ],
+        [
+            "Discount",
+            f"Rs {discount:,.2f}",
+        ],
+        [
+            "Taxable Value",
+            f"Rs {taxable_value:,.2f}",
+        ],
+        [
+            "CGST (6%)",
+            f"Rs {cgst:,.2f}",
+        ],
+        [
+            "SGST (6%)",
+            f"Rs {sgst:,.2f}",
+        ],
+        [
+            "GRAND TOTAL",
+            f"Rs {grand_total:,.2f}",
+        ],
+    ]
+
+    summary_table = Table(
+        summary_rows,
+        colWidths=[180, 180],
+    )
+
+    summary_table.hAlign = "RIGHT"
+
+    summary_table.setStyle(
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 1, colors.black),
+                ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+            ]
+        )
+    )
+
+    elements.append(
+        Paragraph(
+            "<b>Bill Summary</b>",
+            styles["Heading3"],
+        )
+    )
+
+    elements.append(summary_table)
+
+    elements.append(Spacer(1, 15))
+
+    # =====================================================
+    # NOTES
+    # =====================================================
+
+    elements.append(
+        Paragraph(
+            "<b>Notes</b>",
+            styles["Heading3"],
+        )
+    )
+
+    elements.append(
+        Paragraph(
+            data.get("notes", "-"),
+            styles["Normal"],
+        )
+    )
+
+    elements.append(Spacer(1, 15))
+
+    # =====================================================
+    # FOOTER
+    # =====================================================
+
+    elements.append(
+        Paragraph(
+            "Generated by MedTrack",
+            styles["Italic"],
+        )
+    )
 
     document.build(elements)
 
