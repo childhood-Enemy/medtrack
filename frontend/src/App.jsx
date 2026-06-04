@@ -20,31 +20,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, apiUrl } from "./api.js";
 import { money, todayInputDate, uid, newSalesLine, newSupplierLine } from "./utils.js";
 import { get, map } from "lodash";
-import InventoryAlertTable from "./InventoryAlertTable/InventoryAlertTable.jsx";
+import InventoryAlertTable from "./commons/InventoryAlertTable/InventoryAlertTable.jsx";
 import MedicineSelect from "./commons/MedicineSelect/MedicineSelect.jsx";
-import InvoicePage from "./InvoicePage/InvoicePage.jsx";
+import InvoicePage from "./pages/InvoicePage/InvoicePage.jsx";
 import { ROUTES } from "../constants.js";
 import fieldFunctions from "./commons/Fields/Fields.jsx";
-import HomePage from "./HomePage/HomePage.jsx";
+import HomePage from "./pages/HomePage/HomePage.jsx";
 import { TextField, NumberField, DateField, InlineAlert } from "./commons/Fields/Fields.jsx";
-
-function emptyMedicineForm() {
-  return {
-    skuCode: "",
-    skuName: "",
-    medicineName: "",
-    category: "",
-    brand: "",
-    form: "",
-    strength: "",
-    packSize: "",
-    costPrice: "",
-    sellingPrice: "",
-    currentUnits: "0",
-    replenishmentLevel: "0",
-    refillBufferUnits: "0",
-  };
-}
+import MedicinesPage from "./pages/MedicinesPage/MedicinesPage.jsx";
 
 export default function App() {
   const [view, setView] = useState("home");
@@ -317,171 +300,6 @@ function RecentSalesOrders({ orders }) {
     </div>
   );
 }
-
-function MedicinesPage({ medicines, inventory, onChanged }) {
-  const [form, setForm] = useState(emptyMedicineForm());
-  const [editingId, setEditingId] = useState(null);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-
-  const saveMedicine = async (event) => {
-    event.preventDefault();
-    setMessage("");
-    setError("");
-    try {
-      if (editingId) {
-        await api(`/medicines/${editingId}`, { method: "PUT", body: JSON.stringify(form) });
-        await api(`/inventory/${editingId}/correction`, {
-          method: "POST",
-          body: JSON.stringify({
-            currentUnits: form.currentUnits,
-            replenishmentLevel: form.replenishmentLevel,
-            refillBufferUnits: form.refillBufferUnits,
-          }),
-        });
-        setMessage("Medicine updated.");
-      } else {
-        await api("/medicines", { method: "POST", body: JSON.stringify(form) });
-        setMessage("Medicine created.");
-      }
-      setForm(emptyMedicineForm());
-      setEditingId(null);
-      await onChanged();
-    } catch (apiError) {
-      setError((apiError.errors || [apiError.message || "Medicine save failed."]).join(" "));
-    }
-  };
-
-  const editMedicine = (medicine) => {
-    setEditingId(medicine.id);
-    setForm({
-      skuCode: medicine.skuCode,
-      skuName: medicine.skuName,
-      medicineName: medicine.medicineName,
-      category: medicine.category,
-      brand: medicine.brand,
-      form: medicine.form,
-      strength: medicine.strength,
-      packSize: medicine.packSize,
-      costPrice: medicine.costPrice,
-      sellingPrice: medicine.sellingPrice,
-      currentUnits: String(medicine.currentUnits ?? 0),
-      replenishmentLevel: String(medicine.replenishmentLevel ?? 0),
-      refillBufferUnits: String(medicine.refillBufferUnits ?? 0),
-    });
-    setMessage("");
-    setError("");
-  };
-
-  const archiveMedicine = async (medicineId) => {
-    if (!window.confirm("Archive this medicine? It will be hidden from new orders but kept in history.")) {
-      return;
-    }
-    setMessage("");
-    setError("");
-    try {
-      await api(`/medicines/${medicineId}`, { method: "DELETE" });
-      setMessage("Medicine archived.");
-      await onChanged();
-    } catch (apiError) {
-      setError((apiError.errors || [apiError.message || "Archive failed."]).join(" "));
-    }
-  };
-
-  return (
-    <section className="gap-4 grid lg:grid-cols-[430px_1fr]">
-      <form className="p-4 panel" onSubmit={saveMedicine}>
-        <div className="flex justify-between items-start gap-3 mb-4">
-          <div>
-            <h1 className="font-bold text-stone-950 text-xl">Medicines</h1>
-            <p className="text-stone-600 text-sm">Create, update, or archive medicines and stock thresholds.</p>
-          </div>
-          {editingId && (
-            <button className="h-9 btn" onClick={() => { setEditingId(null); setForm(emptyMedicineForm()); }} type="button">
-              <X size={16} />
-              Clear
-            </button>
-          )}
-        </div>
-        <div className="gap-3 grid md:grid-cols-2">
-          <TextField label="SKU Code" value={form.skuCode} onChange={(value) => setForm({ ...form, skuCode: value })} />
-          <TextField label="SKU Name" value={form.skuName} onChange={(value) => setForm({ ...form, skuName: value })} />
-          <TextField label="Medicine Name" value={form.medicineName} onChange={(value) => setForm({ ...form, medicineName: value })} />
-          <TextField label="Brand" value={form.brand} onChange={(value) => setForm({ ...form, brand: value })} />
-          <TextField label="Category" value={form.category} onChange={(value) => setForm({ ...form, category: value })} />
-          <TextField label="Form" value={form.form} onChange={(value) => setForm({ ...form, form: value })} />
-          <TextField label="Strength" value={form.strength} onChange={(value) => setForm({ ...form, strength: value })} />
-          <TextField label="Pack Size" value={form.packSize} onChange={(value) => setForm({ ...form, packSize: value })} />
-          <NumberField label="Cost Price" value={form.costPrice} onChange={(value) => setForm({ ...form, costPrice: value })} step="0.01" />
-          <NumberField label="Selling Price" value={form.sellingPrice} onChange={(value) => setForm({ ...form, sellingPrice: value })} step="0.01" />
-          <NumberField label="Current Units" value={form.currentUnits} onChange={(value) => setForm({ ...form, currentUnits: value })} />
-          <NumberField label="Replenishment Level" value={form.replenishmentLevel} onChange={(value) => setForm({ ...form, replenishmentLevel: value })} />
-          <NumberField label="Refill Buffer" value={form.refillBufferUnits} onChange={(value) => setForm({ ...form, refillBufferUnits: value })} />
-        </div>
-        <button className="mt-4 w-full btn btn-primary" type="submit">
-          <Save size={18} />
-          {editingId ? "Update Medicine" : "Create Medicine"}
-        </button>
-        {message && <InlineAlert tone="ok" text={message} />}
-        {error && <InlineAlert tone="error" text={error} />}
-      </form>
-
-      <div className="overflow-hidden panel">
-        <div className="px-4 py-3 border-stone-200 border-b">
-          <h2 className="font-bold text-stone-950 text-lg">Medicine Stock</h2>
-          {/* Add filter for order now /  */}
-        </div>
-        <div className="max-h-[255px] overflow-auto">
-          <table className="w-80 min-w-[880px] border-collapse">
-            <thead className="table-head">
-              <tr>
-                <th className="px-3 py-2">Medicine</th>
-                <th className="px-3 py-2">Brand</th>
-                <th className="px-3 py-2">Units</th>
-                <th className="px-3 py-2">Level</th>
-                {/* <th className="px-3 py-2">Status</th> */}
-                <th className="px-3 py-2">Price</th>
-                <th className="px-3 py-2">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {medicines.map((medicine) => {
-                const stock = inventory.find((row) => row.medicineId === medicine.id);
-                const statusColor = stock?.status === "REFILL_SOON" ? "bg-amber-50" : stock?.status === "LOW_STOCK" ? "bg-red-50" : "bg-green-50";
-                return (
-                  <tr className={statusColor} key={medicine.id}>
-                    <td className="table-cell">{medicine.skuName}</td>
-                    <td className="table-cell">{medicine.brand}</td>
-                    <td className="table-cell">{stock?.currentUnits ?? medicine.currentUnits ?? 0}</td>
-                    <td className="table-cell">{stock?.replenishmentLevel ?? medicine.replenishmentLevel ?? 0}</td>
-                    {/* <td className="table-cell">{stock?.status || "OK"}</td> */}
-                    <td className="table-cell">Rs {money(medicine.sellingPrice)}</td>
-                    <td className="table-cell">
-                      <div className="flex gap-2">
-                        <button className="h-6 btn" onClick={() => editMedicine(medicine)} type="button">
-                          <Save size={16} />
-                        </button>
-                        <button className="h-6 btn btn-danger" onClick={() => archiveMedicine(medicine.id)} type="button">
-                          <Archive size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {medicines.length === 0 && (
-                <tr>
-                  <td className="table-cell text-stone-600" colSpan="7">No active medicines yet.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 
 // Feature - 3: Changing this to allow search functionality in the medicine select dropdown for orders and supplier invoices
 /*function MedicineSelect({ medicines, value, onChange }) {

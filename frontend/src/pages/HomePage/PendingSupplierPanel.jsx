@@ -16,8 +16,8 @@ import {
   Pill,
   X,
 } from "lucide-react";
-import { money } from "../utils.js";
-import { STATUS_OPTIONS } from "../../constants.js";
+import { money } from "../../utils.js";
+import { STATUS_OPTIONS } from "../../../constants.js";
 
 const PendingSupplierPanel = ({ orders, total, page, pageSize }) => {
   return (

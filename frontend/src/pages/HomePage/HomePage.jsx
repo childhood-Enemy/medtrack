@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { get, map } from "lodash";
 import { AlertTriangle } from "lucide-react";
-import { ROUTES, PILL_OPTIONS } from "../../constants.js";
-import { api } from "../api.js";
+import { ROUTES, PILL_OPTIONS } from "../../../constants.js";
+import { api } from "../../api.js";
 import PendingSupplierPanel from "./PendingSupplierPanel.jsx";
-import PillButton from "../PillButton/PillButton.jsx";
-import InventoryAlertTable from "../InventoryAlertTable/InventoryAlertTable.jsx";
+import PillButton from "../../PillButton/PillButton.jsx";
+import InventoryAlertTable from "../../commons/InventoryAlertTable/InventoryAlertTable.jsx";
 
 const HomePage = ({ summary, loading, setBulkOrderInvoice = () => { }, bulkOrderInvoice = null }) => {
     const [activeTab, setActiveTab] = useState("low-supply");
