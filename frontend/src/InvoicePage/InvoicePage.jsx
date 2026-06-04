@@ -42,8 +42,6 @@ const InvoicePage = ({ medicines, suppliers, supplierOrders, onChanged, bulkOrde
         }
     }, [bulkOrderInvoice])
 
-
-
     //Save Supplier
     const saveSupplier = async (event) => {
         event.preventDefault();

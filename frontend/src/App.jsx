@@ -87,12 +87,28 @@ export default function App() {
     refreshAll();
   }, [refreshAll]);
 
+  // Fixes navigation for bulk ordering & moving between tabs
+  useEffect(() => {
+    view != "invoice" && setBulkOrderInvoice(null);
+  }, [view])
+
+  useEffect(() => {
+    // Once you have the data selected in bulkOrderInvoice - redirect to invoice page with the data needed to prefill the invoice form and line items.
+    if (bulkOrderInvoice != null) {
+      setView("invoice");
+    }
+  }, [bulkOrderInvoice]);
+
   return (
     <div className="min-h-screen">
       <header className="bg-white border-stone-300 border-b">
         <div className="flex md:flex-row flex-col md:justify-between md:items-center gap-3 mx-auto px-4 py-4 max-w-7xl">
           <div>
-            <div className="font-bold text-stone-950 text-2xl tracking-normal"><button onClick={() => setView("home")}>MEDTRACK</button></div>
+            <div className="font-bold text-stone-950 text-2xl tracking-normal"><button onClick={() => {
+              // setBulkOrderInvoice(null)
+              setView("home")
+            }}>MEDTRACK</button></div>
+
             <div className="text-stone-600 text-sm">Inventory, sales receipts, and supplier order follow-up</div>
           </div>
           <nav className="flex flex-wrap gap-2">

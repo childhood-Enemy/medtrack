@@ -7,15 +7,8 @@ import PendingSupplierPanel from "./PendingSupplierPanel.jsx";
 import PillButton from "../PillButton/PillButton.jsx";
 import InventoryAlertTable from "../InventoryAlertTable/InventoryAlertTable.jsx";
 
-const HomePage = ({ summary, loading, setView = () => { }, setBulkOrderInvoice = () => { }, bulkOrderInvoice = null }) => {
+const HomePage = ({ summary, loading, setBulkOrderInvoice = () => { }, bulkOrderInvoice = null }) => {
     const [activeTab, setActiveTab] = useState("low-supply");
-
-    useEffect(() => {
-        // Once you have the data selected in bulkOrderInvoice - redirect to invoice page with the data needed to prefill the invoice form and line items.
-        if (bulkOrderInvoice != null) {
-            setView("invoice");
-        }
-    }, [bulkOrderInvoice]);
 
     const bulkOrderClick = (medsToOrder) => {
         const invoiceLines = map(medsToOrder, (medicine) => {
@@ -30,6 +23,7 @@ const HomePage = ({ summary, loading, setView = () => { }, setBulkOrderInvoice =
         });
         setBulkOrderInvoice(invoiceLines);
     };
+
     if (loading || !summary) {
         return <div className="p-4 text-stone-600 text-sm panel">Loading home summary...</div>;
     }
