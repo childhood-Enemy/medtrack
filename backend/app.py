@@ -28,6 +28,11 @@ app = Flask(
     
 store = SQLiteStore()
 
+print("BASE_DIR =", BASE_DIR)
+print("FRONTEND_DIST =", FRONTEND_DIST)
+print("EXISTS =", os.path.exists(FRONTEND_DIST))
+print("INDEX =", os.path.exists(os.path.join(FRONTEND_DIST, "index.html")))
+
 
 @app.after_request
 def add_cors_headers(response: Response) -> Response:
@@ -71,7 +76,15 @@ def int_query(name: str, default: int, *, minimum: int = 1, maximum: int = 200) 
 
 @app.get("/api/health")
 def health():
-    return jsonify(store.health())
+    return jsonify({
+        "health": store.health(),
+        "base_dir": BASE_DIR,
+        "frontend_dist": FRONTEND_DIST,
+        "frontend_exists": os.path.exists(FRONTEND_DIST),
+        "index_exists": os.path.exists(
+            os.path.join(FRONTEND_DIST, "index.html")
+        )
+    })
 
 
 @app.get("/api/home/summary")
@@ -192,6 +205,13 @@ def supplier_order_invoice(supplier_order_id: int):
         mimetype="application/pdf",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+@app.route("/debug")
+def debug():
+    return {
+        "static_folder": app.static_folder,
+        "exists": os.path.exists(app.static_folder),
+    }
 
 @app.route("/")
 def serve_react():
