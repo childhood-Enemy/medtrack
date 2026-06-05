@@ -1,4 +1,8 @@
 from __future__ import annotations
+from flask import send_from_directory
+import os
+import webbrowser
+from threading import Timer
 
 from flask import Flask, Response, jsonify, request
 from werkzeug.exceptions import HTTPException
@@ -12,7 +16,16 @@ from reportlab.platypus import (
 )
 
 
-app = Flask(__name__)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+FRONTEND_DIST = os.path.join(BASE_DIR, "frontend", "dist")
+
+app = Flask(
+    __name__,
+    static_folder=FRONTEND_DIST,
+    static_url_path=""
+)
+    
 store = SQLiteStore()
 
 
@@ -180,6 +193,23 @@ def supplier_order_invoice(supplier_order_id: int):
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 
+@app.route("/")
+def serve_react():
+    return send_from_directory(app.static_folder, "index.html")
+
+def open_browser():
+    webbrowser.open("http://127.0.0.1:5000")
+
+# if __name__ == "__main__":
+#     app.run(host="127.0.0.1", port=5000, debug=True)
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    Timer(2, open_browser).start()
+
+    app.run(
+        host="127.0.0.1",
+        port=5000,
+        debug=False
+    )
+
+
