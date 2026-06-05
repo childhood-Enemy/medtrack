@@ -95,6 +95,7 @@ const MedicinesPage = ({ medicines, inventory, onChanged }) => {
                     editingId={editingId}
                     setEditingId={setEditingId}
                     medicineData={medicineData}
+                    onChanged={onChanged}
                 />
             }
 

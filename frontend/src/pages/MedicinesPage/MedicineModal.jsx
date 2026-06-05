@@ -4,6 +4,7 @@ import { emptyMedicineForm, MEDICINE_FIELDS } from "../../../constants";
 import { NumberField, TextField } from "../../commons/Fields/Fields";
 import { InlineAlert } from "../../commons/Fields/Fields";
 import { Save, Archive, X } from "lucide-react";
+import { api, apiUrl } from "../../api";
 
 // Editing Id : Medicine ID selected on edit action button
 // SetEditingId: 
@@ -14,8 +15,9 @@ const MedicineModal = (
         setEditingId = () => { },
         onSave = () => { },
         onClear = () => { },
-        setForm = () => { },
-        medicineData = {}
+        setMedicineData = () => { },
+        medicineData = {},
+        onChanged = () => { }
     }
 ) => {
     const [message, setMessage] = useState("");
@@ -69,7 +71,7 @@ const MedicineModal = (
                         onClick={() => {
                             setShowMedicineModal(false);
                             setEditingId(null);
-                            setForm(emptyMedicineForm);
+                            setMedicineData(emptyMedicineForm);
                         }}
                     >
                         <X size={20} />
@@ -82,7 +84,7 @@ const MedicineModal = (
                     onSubmit={saveMedicine}
                 >
                     <div className="gap-4 grid md:grid-cols-2 lg:grid-cols-3">
-                        {MEDICINE_FIELDS.map((field) => {
+                        {/* {MEDICINE_FIELDS.map((field) => {
                             const Component =
                                 field.type === "number"
                                     ? NumberField
@@ -92,17 +94,30 @@ const MedicineModal = (
                                 <Component
                                     key={field.key}
                                     label={field.label}
-                                    value={medicineData[field.key]}
+                                    value={value ? value : medicineData[field.key]}
                                     // step={field.step}
                                     onChange={(value) =>
-                                        setForm({
+                                        setMedicineData({
                                             ...medicineData,
                                             [field.key]: value,
                                         })
                                     }
                                 />
                             );
-                        })}
+                        })} */}
+                        <TextField label="SKU Code" value={medicineData.skuCode} onChange={(value) => setMedicineData({ ...medicineData, skuCode: value })} />
+                        <TextField label="SKU Name" value={medicineData.skuName} onChange={(value) => setMedicineData({ ...medicineData, skuName: value })} />
+                        <TextField label="Medicine Name" value={medicineData.medicineName} onChange={(value) => setMedicineData({ ...medicineData, medicineName: value })} />
+                        <TextField label="Brand" value={medicineData.brand} onChange={(value) => setMedicineData({ ...medicineData, brand: value })} />
+                        <TextField label="Category" value={medicineData.category} onChange={(value) => setMedicineData({ ...medicineData, category: value })} />
+                        <TextField label="Form" value={medicineData.form} onChange={(value) => setMedicineData({ ...medicineData, form: value })} />
+                        <TextField label="Strength" value={medicineData.strength} onChange={(value) => setMedicineData({ ...medicineData, strength: value })} />
+                        <TextField label="Pack Size" value={medicineData.packSize} onChange={(value) => setMedicineData({ ...medicineData, packSize: value })} />
+                        <NumberField label="Cost Price" value={medicineData.costPrice} onChange={(value) => setMedicineData({ ...medicineData, costPrice: value })} step="0.01" />
+                        <NumberField label="Selling Price" value={medicineData.sellingPrice} onChange={(value) => setMedicineData({ ...medicineData, sellingPrice: value })} step="0.01" />
+                        <NumberField label="Current Units" value={medicineData.currentUnits} onChange={(value) => setMedicineData({ ...medicineData, currentUnits: value })} />
+                        <NumberField label="Replenishment Level" value={medicineData.replenishmentLevel} onChange={(value) => setMedicineData({ ...medicineData, replenishmentLevel: value })} />
+                        <NumberField label="Refill Buffer" value={medicineData.refillBufferUnits} onChange={(value) => setMedicineData({ ...medicineData, refillBufferUnits: value })} />
                     </div>
 
                     {(message || error) && (
@@ -130,7 +145,7 @@ const MedicineModal = (
                             onClick={() => {
                                 setShowMedicineModal(false);
                                 setEditingId(null);
-                                setForm(emptyMedicineForm);
+                                setMedicineData(emptyMedicineForm);
                             }}
                         >
                             Cancel
